@@ -149,6 +149,8 @@ if __name__ == '__main__':
     k    = 1.5  # 0.5 <= k <= 5 for texture synthesis
 
     n_half = np.floor((n_lg * n_lg)/2.) # half feature for fine scale
+    pad_sm = np.floor(n_sm/2.)
+    pad_lg = np.floor(n_lg/2.)
     num_channels = Ap.shape[2]
 
     weights = compute_weights(n_sm, n_lg, n_half, num_channels)
@@ -163,9 +165,13 @@ if __name__ == '__main__':
 
     # Create Random Initialization of Bp
 
-    Bp_flat = []
-    for level in range(len(A_pyr)):
-        Bp_flat.append(np.random.rand(B_pyr[level].shape[0] * B_pyr[level].shape[1], B_pyr[level].shape[2]))
+    Bp_pyr = [list([]) for _ in xrange(len(A_pyr))]
+    for level in range(len(B_pyr)):
+        Bp_pyr[level] = np.nan * B_pyr[level]
+    for level in range(2):
+        Bp_pyr[level] = np.random.rand(B_pyr[level].shape[0], \
+                                       B_pyr[level].shape[1], \
+                                       B_pyr[level].shape[2])
 
     stop_time = time.time()
     print 'Pyramid Creation: %f' % (stop_time - start_time)
@@ -212,9 +218,16 @@ if __name__ == '__main__':
 
                 # Create B/Bp Feature Vector
 
-                Bp_feat = np.hstack([Bp_flat[level - 1][  q_sm - 4:   q_sm + 4 + 1, :].flatten(), \
-                                     Bp_flat[level    ][q - n_half: q + n_half + 1, :].flatten()])
-                BBp_feat = np.hstack([B_feat[level][q, :], Bp_feat])
+                Bp_sm = np.pad(Bp_pyr[level - 1], ((pad_sm, pad_sm), (pad_sm, pad_sm), (0, 0)), mode='reflect')
+                Bp_lg = np.pad(Bp_pyr[level    ], ((pad_lg, pad_lg), (pad_lg, pad_lg), (0, 0)), mode='reflect')
+
+                # [r : r + 2 * pad + 1] == [r + pad - pad : r + pad + pad + 1]
+                Bp_feat = np.hstack([Bp_sm[np.ceil(r/2.) : np.ceil(r/2.) + 2*pad_sm + 1, \
+                                           np.ceil(c/2.) : np.ceil(c/2.) + 2*pad_sm + 1, \
+                                           :].flatten(),
+                                     Bp_lg[r : r + pad_lg + 1, c : c + 2*pad_lg + 1, :].flatten()])
+                # we pull the first pad + 1 rows and discard the last pad + 1 columns of the last row
+                BBp_feat = np.hstack([B_feat[level][q, :], Bp_feat[:-(num_channels * (pad_lg + 1))]])
 
                 # Find Approx Nearest Neighbor
                 ann_start_time = time.time()
@@ -250,7 +263,7 @@ if __name__ == '__main__':
 
                 # Set Bp and Update s
 
-                Bp_flat[level][q, :] = p_val
+                Bp_pyr[level][r, c, :] = p_val
                 np.append(s, p)
 
         stop_time = time.time()
@@ -258,7 +271,7 @@ if __name__ == '__main__':
 
     # Output Image
 
-    im_out = Bp_flat[-1].reshape(Ap.shape)
+    im_out = im_out = Bp_pyr[-1]
 
     end_time = time.time()
     print 'Total time: %f' % (end_time - begin_time)
