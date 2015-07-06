@@ -21,6 +21,17 @@ def convert_to_RGB(img):
     return np.einsum('ij,klj->kli', m, img)
 
 
+def remap_luminance(A, Ap, B):
+    m_A = np.mean(A)
+    m_B = np.mean(B)
+    s_A = np.std(A)
+    s_B = np.std(B)
+
+    A_remap  = (m_B/m_A) * ( A - m_A) + m_B
+    Ap_remap = (m_B/m_A) * (Ap - m_A) + m_B
+
+    return A_remap, Ap_remap
+
 def compute_gaussian_pyramid(img, min_size):
     h, w = img.shape[0:2]
     curr_size = np.min([h, w])

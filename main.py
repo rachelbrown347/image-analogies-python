@@ -1,10 +1,9 @@
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
-import sys
 import time
 
-from img_preprocess import convert_to_YIQ, convert_to_RGB, compute_gaussian_pyramid, initialize_Bp
+from img_preprocess import convert_to_YIQ, convert_to_RGB, compute_gaussian_pyramid, initialize_Bp, remap_luminance
 from texture_analogies import compute_features, best_approximate_match, best_coherence_match, compute_distance
 import config as c
 
@@ -29,11 +28,17 @@ if __name__ == '__main__':
     # B_orig = plt.imread(B_fname)
 
     # Files for Testing
-    A_orig = plt.imread('./images/freud-src.jpg')
-    Ap_orig = plt.imread('./images/freud-filt.jpg')
-    B_orig = plt.imread('./images/shore-src.jpg')
-    Bp_fname = './output/shore-filt-freud-10.jpg'
-    #B_orig = A_orig
+    # A_orig = plt.imread('./images/freud-src.jpg')
+    # Ap_orig = plt.imread('./images/freud-filt.jpg')
+    # B_orig = plt.imread('./images/shore-src.jpg')
+    # Bp_fname = './output/shore-filt-freud-25-3.jpg'
+
+    A_orig = plt.imread('./../sample-images/analogies/wood_orig_sm.jpg')
+    Ap_orig = plt.imread('./../sample-images/analogies/real_wood_orig_sm.jpg')
+    B_orig = plt.imread('./../sample-images/analogies/wood_relit_sm_2p5_2.jpg')
+    Bp_fname = './../sample-images/analogies/output/real_wood_relit_sm_2p5_2_k25.jpg'
+
+    artistic_filter = False
 
     assert(A_orig.shape == Ap_orig.shape == B_orig.shape)
 
@@ -58,15 +63,19 @@ if __name__ == '__main__':
 
     c.num_ch, c.padding_sm, c.padding_lg, c.weights = c.setup_vars(A)
 
+    # Remap Luminance
+
+    #A, Ap = remap_luminance(A, Ap, B)
+
     # Create Pyramids
 
     A_pyr  = compute_gaussian_pyramid( A, c.n_sm)
     Ap_pyr = compute_gaussian_pyramid(Ap, c.n_sm)
     B_pyr  = compute_gaussian_pyramid( B, c.n_sm)
 
-    # if c.convert:
-    #     B_color_pyr  = compute_gaussian_pyramid(B_yiq, c.n_sm)
-    #     Bp_color_pyr = compute_gaussian_pyramid(Ap_yiq, c.n_sm) # initialized as Ap
+    if not artistic_filter:
+        Ap_color_pyr = compute_gaussian_pyramid(Ap_orig, c.n_sm)
+        Bp_color_pyr = compute_gaussian_pyramid(np.nan * np.ones(Ap_orig.shape), c.n_sm)
 
     # Create Random Initialization of Bp
 
@@ -83,24 +92,29 @@ if __name__ == '__main__':
     Ap_feat = compute_features(Ap_pyr, c, full_feat=False)
     B_feat  = compute_features(B_pyr,  c, full_feat=True)
 
+    stop_time = time.time()
+    print 'Feature Extraction: %f' % (stop_time - start_time)
+
     # Build Structures for ANN
 
-    # FLANN_INDEX_LSH = 4
-    # params = dict(algorithm = FLANN_INDEX_LSH,
-    #               table_number = 12,
-    #               key_size = 20,
-    #               multi_probe_level = 0)
+    start_time = time.time()
+
+    FLANN_INDEX_LSH = 4
+    params = dict(algorithm = FLANN_INDEX_LSH,
+                  table_number = 20,
+                  key_size = 20,
+                  multi_probe_level = 2)
 
     # FLANN_INDEX_KDTREE = 1
     # params = dict(algorithm = FLANN_INDEX_KDTREE,
-    #                           trees=12)
+    #                           trees=20)
 
-    FLANN_INDEX_AUTOTUNED = 5
-    params = dict(algorithm = FLANN_INDEX_AUTOTUNED,
-                  target_precision = 1,
-                  build_weight = 1,
-                  memory_weight = 1,
-                  sample_fraction = 1)
+    # FLANN_INDEX_AUTOTUNED = 5
+    # params = dict(algorithm = FLANN_INDEX_AUTOTUNED,
+    #               target_precision = 1,
+    #               build_weight = 1,
+    #               memory_weight = 1,
+    #               sample_fraction = 1)
 
     flnn = [list([]) for _ in xrange(len(A_pyr))]
     As = [list([]) for _ in xrange(len(A_pyr))]
@@ -109,7 +123,7 @@ if __name__ == '__main__':
         flnn[level] = cv2.flann_Index(As[level].astype(np.float32), params)
 
     stop_time = time.time()
-    print 'Feature and Index Creation: %f' % (stop_time - start_time)
+    print 'ANN Index Creation: %f' % (stop_time - start_time)
 
     # # This is the Algorithm Code
 
@@ -163,7 +177,7 @@ if __name__ == '__main__':
                     d_app = compute_distance(As[level][p_app, :], BBp_feat, c.weights)
                     d_coh = compute_distance(As[level][p_coh, :], BBp_feat, c.weights)
 
-                    if d_coh <= d_app * (1 + 2**(level - num_levels-1) * c.k):
+                    if d_coh <= d_app * (1 + 2**(level - num_levels) * c.k):
                         p = p_coh
                     else:
                         p = p_app
@@ -178,20 +192,23 @@ if __name__ == '__main__':
 
                 Bp_pyr[level][row, col] = p_val
 
-                # if c.convert:
-                #     Bp_color_pyr[level][row, col] = np.hstack([p_val, B_color_pyr[level][row, col][1:]])
+                if not artistic_filter:
+                    Bp_color_pyr[level][row, col] = Ap_color_pyr[level][p_row, p_col]
 
                 np.append(s, p)
 
-        plt.imsave(Bp_fname, Bp_pyr[level], cmap='gray')
+        plt.imsave(Bp_fname[:-4] + '_bw.jpg', Bp_pyr[level], cmap='gray')
 
         stop_time = time.time()
         print 'Level %d time: %f' % (level, stop_time - start_time)
 
     # Output Image
 
-    im_out = convert_to_RGB(np.dstack([Bp_pyr[-1], B_yiq[:, :, 1:]]))
-    im_out = np.clip(im_out, 0, 1)
+    if artistic_filter:
+        im_out = convert_to_RGB(np.dstack([Bp_pyr[-1], B_yiq[:, :, 1:]]))
+        im_out = np.clip(im_out, 0, 1)
+    else:
+        im_out = Bp_color_pyr[-1]
 
     # if c.convert:
     #     im_out = convert_to_RGB(Bp_color_pyr[-1])
