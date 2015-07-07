@@ -1,9 +1,10 @@
+from itertools import chain, repeat
 import numpy as np
 
 
 # Set Parameters and Variables
 convert = True  # Convert to YIQ
-k       = 25    # 0.5 <= k <= 5 for texture synthesis
+k       = 100    # 0.5 <= k <= 5 for texture synthesis
 n_sm    = 3     # coarse scale neighborhood size
 n_lg    = 5     # fine scale neighborhood size
 n_half  = np.floor((n_lg * n_lg)/2.) # half feature for fine scale
@@ -50,9 +51,9 @@ def compute_weights(n_sm, n_lg, n_half, num_ch):
     gauss_sm = matlab_style_gauss2D((n_sm, n_sm), 0.5)
     gauss_lg = matlab_style_gauss2D((n_lg, n_lg),   1)
 
-    w_sm = (1./(n_sm * n_sm)) * np.dstack([gauss_sm, gauss_sm, gauss_sm]).flatten()
-    w_lg = (1./(n_lg * n_lg)) * np.dstack([gauss_lg, gauss_lg, gauss_lg]).flatten()
-    w_half = (1./n_half) * np.dstack([gauss_lg, gauss_lg, gauss_lg]).flatten()[: n_half * num_ch]
+    w_sm = (1./(n_sm * n_sm)) * np.dstack(list(chain.from_iterable(repeat(e, num_ch) for e in [gauss_sm]))).flatten()
+    w_lg = (1./(n_lg * n_lg)) * np.dstack(list(chain.from_iterable(repeat(e, num_ch) for e in [gauss_lg]))).flatten()
+    w_half = (1./n_half) * np.dstack(list(chain.from_iterable(repeat(e, num_ch) for e in [gauss_lg]))).flatten()[: n_half * num_ch]
 
     return np.hstack([w_sm, w_lg, w_sm, w_half])
 
