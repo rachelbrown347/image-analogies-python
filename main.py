@@ -182,7 +182,6 @@ if __name__ == '__main__':
 
                 ann_stop_time = time.time()
                 ann_time_level = ann_time_level + ann_stop_time - ann_start_time
-                ann_time_total = ann_time_total + ann_time_level
 
                 # is this the first iteration for this level?
                 # then skip coherence step
@@ -226,6 +225,8 @@ if __name__ == '__main__':
                     Bp_color_pyr[level][row, col] = Ap_color_pyr[level][p_row, p_col]
 
                 s = np.append(s, p)
+
+        ann_time_total = ann_time_total + ann_time_level
 
         #print(np.isnan(p_src))
         #print(np.isnan(app_dist))
