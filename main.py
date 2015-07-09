@@ -1,11 +1,11 @@
-import pyflann as pf
 import numpy as np
+from numpy.random import randint
 import matplotlib.pyplot as plt
 import time
 import warnings
 
 from img_preprocess import convert_to_YIQ, convert_to_RGB, compute_gaussian_pyramid, initialize_Bp, remap_luminance
-from texture_analogies import compute_features, extract_Bp_feature, best_approximate_match, best_coherence_match, compute_distance
+from texture_analogies import create_index, extract_pixel_feature, best_approximate_match, best_coherence_match, compute_distance
 import config as c
 
 
@@ -97,30 +97,11 @@ if __name__ == '__main__':
     stop_time = time.time()
     print 'Environment Setup: %f' % (stop_time - start_time)
 
-    # Compute Feature Vectors
-
-    start_time = time.time()
-
-    A_feat  = compute_features(A_pyr,  c, full_feat=True)
-    Ap_feat = compute_features(Ap_pyr, c, full_feat=False)
-    B_feat  = compute_features(B_pyr,  c, full_feat=True)
-
-    stop_time = time.time()
-    print 'Feature Extraction: %f' % (stop_time - start_time)
-
     # Build Structures for ANN
 
     start_time = time.time()
 
-    flann = [pf.FLANN() for _ in xrange(max_levels)]
-    params = [list([]) for _ in xrange(max_levels)]
-    As = [list([]) for _ in xrange(max_levels)]
-    for level in range(1, max_levels):
-        As[level] = np.hstack([A_feat[level], Ap_feat[level]])
-        params[level] = flann[level].build_index(As[level],
-                                      algorithm='autotuned',
-                                      target_precision=0.9);
-        #print(params[level])
+    flann, flann_params, As_size = create_index(A_pyr, Ap_pyr, c)
 
     stop_time = time.time()
     ann_time_total = stop_time - start_time
@@ -138,7 +119,20 @@ if __name__ == '__main__':
 
         Bp_ix = np.arange(imh*imw).reshape((imh, imw))
 
-        s = np.array([])
+        # pad each pyramid level to avoid edge problems
+        A_sm_padded  = np.pad( A_pyr[level - 1], c.padding_sm, mode='symmetric')
+        A_lg_padded  = np.pad( A_pyr[level    ], c.padding_lg, mode='symmetric')
+        A_pd = [A_sm_padded, A_lg_padded]
+
+        Ap_sm_padded = np.pad(Ap_pyr[level - 1], c.padding_sm, mode='symmetric')
+        Ap_lg_padded = np.pad(Ap_pyr[level    ], c.padding_lg, mode='symmetric')
+        Ap_pd = [Ap_sm_padded, Ap_lg_padded]
+
+        B_sm_padded  = np.pad( B_pyr[level - 1], c.padding_sm, mode='symmetric')
+        B_lg_padded  = np.pad( B_pyr[level    ], c.padding_lg, mode='symmetric')
+        B_pd = [B_sm_padded, B_lg_padded]
+
+        s = np.nan * np.ones((imh, imw))
 
         # debugging structures
         p_src    = np.nan * np.ones((imh, imw, 3))
@@ -153,38 +147,60 @@ if __name__ == '__main__':
 
         for row in range(imh):
             for col in range(imw):
-                q = row * imw + col
+                # pad each pyramid level to avoid edge problems
+                # could be done outside the loop with tricks
+                Bp_sm_padded = np.pad(Bp_pyr[level - 1], c.padding_sm, mode='symmetric')
+                Bp_lg_padded = np.pad(Bp_pyr[level    ], c.padding_lg, mode='symmetric')
+                Bp_pd = [Bp_sm_padded, Bp_lg_padded]
 
-                BBp_feat = extract_Bp_feature(Bp_pyr, B_feat, q, level, row, col, c)
+                B_feat  = extract_pixel_feature( B_pd, (row, col), c, full_feat=True)
+                Bp_feat = extract_pixel_feature(Bp_pd, (row, col), c, full_feat=False)
 
-                assert(BBp_feat.shape[0] == As[level].shape[1])
+                BBp_feat = np.hstack([B_feat, Bp_feat])
+
+                assert(BBp_feat.shape == (As_size[level][1],))
 
                 # Find Approx Nearest Neighbor
 
                 ann_start_time = time.time()
 
-                p_app = best_approximate_match(flann[level], params[level], BBp_feat, As[level].shape[0])
+                p_app_ix = best_approximate_match(flann[level], flann_params[level], BBp_feat, As_size[level][0])
 
                 ann_stop_time = time.time()
                 ann_time_level = ann_time_level + ann_stop_time - ann_start_time
 
+                # translate p_app_ix back to row, col
+                Ap_imh, Ap_imw = Ap_pyr[level].shape
+                p_app_col = p_app_ix % Ap_imw
+                p_app_row = (p_app_ix - p_app_col) // Ap_imw
+                p_app = (p_app_row, p_app_col)
+
                 # is this the first iteration for this level?
                 # then skip coherence step
 
-                if len(s) < 1:
-                    p = np.random.randint(As[level].shape[0])
+                if np.sum(~np.isnan(s)) < 1:
+                    p = p_app
+                    #p = (randint(Ap_imh), randint(Ap_imw))
 
                 # Find Coherence Match and Compare Distances
 
                 else:
-                    p_coh = best_coherence_match(As[level], BBp_feat, s, q, row, col, Bp_ix, c)
+                    p_coh = best_coherence_match(A_pd, Ap_pd, BBp_feat, s, (row, col), c)
 
                     if p_coh == -1: # blue
                         p = p_app
                         p_src[row, col] = np.array([0, 0, 1])
                     else:
-                        d_app = compute_distance(As[level][p_app, :], BBp_feat, c.weights)
-                        d_coh = compute_distance(As[level][p_coh, :], BBp_feat, c.weights)
+                        A_feat_app = extract_pixel_feature( A_pd, p_app, c, full_feat=True)
+                        Ap_feat_app = extract_pixel_feature(Ap_pd, p_app, c, full_feat=False)
+                        AAp_feat_app = np.hstack([A_feat_app, Ap_feat_app])
+
+                        A_feat_coh = extract_pixel_feature( A_pd, p_coh, c, full_feat=True)
+                        Ap_feat_coh = extract_pixel_feature(Ap_pd, p_coh, c, full_feat=False)
+                        AAp_feat_coh = np.hstack([A_feat_coh, Ap_feat_coh])
+
+                        d_app = compute_distance(AAp_feat_app, BBp_feat, c.weights)
+                        d_coh = compute_distance(AAp_feat_coh, BBp_feat, c.weights)
 
                         app_dist[row, col] = d_app
                         coh_dist[row, col] = d_coh
@@ -196,21 +212,16 @@ if __name__ == '__main__':
                             p = p_app
                             p_src[row, col] = np.array([1, 0, 0])
 
-                # Get Pixel Value from Ap
-                Ap_imw = Ap_pyr[level].shape[1]
-                p_col = p % Ap_imw
-                p_row = (p - p_col) // Ap_imw
-
-                p_val = Ap_pyr[level][p_row, p_col]
+                p_val = Ap_pyr[level][p[0], p[1]]
 
                 # Set Bp and Update s
 
                 Bp_pyr[level][row, col] = p_val
 
                 if not artistic_filter:
-                    Bp_color_pyr[level][row, col] = Ap_color_pyr[level][p_row, p_col]
+                    Bp_color_pyr[level][row, col] = Ap_color_pyr[level][p[0], p[1]]
 
-                s = np.append(s, p)
+                s[row, col] = p
 
         ann_time_total = ann_time_total + ann_time_level
 

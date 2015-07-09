@@ -1,8 +1,29 @@
+import pyflann as pf
 import numpy as np
 from numpy.linalg import norm
 from sklearn.feature_extraction.image import extract_patches_2d
 
-def compute_features(im_pyr, c, full_feat):
+
+def create_index(A_pyr, Ap_pyr, c):
+    A_feat  = compute_feature_array(A_pyr,  c, full_feat=True)
+    Ap_feat = compute_feature_array(Ap_pyr, c, full_feat=False)
+
+    max_levels = len(A_pyr)
+
+    flann = [pf.FLANN() for _ in xrange(max_levels)]
+    flann_params = [list([]) for _ in xrange(max_levels)]
+    As_size = [list([]) for _ in xrange(max_levels)]
+    for level in range(1, max_levels):
+        As = np.hstack([A_feat[level], Ap_feat[level]])
+        As_size[level] = As.shape
+        flann_params[level] = flann[level].build_index(As[level],
+                                                       algorithm='autotuned',
+                                                       target_precision=0.9,
+                                                       sample_fraction=0.5)
+    return flann, flann_params, As_size
+
+
+def compute_feature_array(im_pyr, c, full_feat):
     # features will be organized like this:
     # sm_imA, lg_imA (channels shuffled C-style)
 
@@ -42,20 +63,18 @@ def compute_features(im_pyr, c, full_feat):
     return im_features
 
 
-def extract_Bp_feature(Bp_pyr, B_feat, q, level, row, col, c):
-    # pad each pyramid level to avoid edge problems
-    Bp_sm = np.pad(Bp_pyr[level - 1], c.padding_sm, mode='symmetric')
-    Bp_lg = np.pad(Bp_pyr[level    ], c.padding_lg, mode='symmetric')
-
+def extract_pixel_feature((im_sm_padded, im_lg_padded), (row, col), c, full_feat):
     # Extract B/Bp Feature Vector
 
-    Bp_feat = np.hstack([Bp_sm[np.floor(row/2.) : np.floor(row/2.) + 2 * c.pad_sm + 1, \
+    Bp_feat = np.hstack([im_sm_padded[np.floor(row/2.) : np.floor(row/2.) + 2 * c.pad_sm + 1, \
                                np.floor(col/2.) : np.floor(col/2.) + 2 * c.pad_sm + 1].flatten(),
-                         Bp_lg[row : row + c.pad_lg + 1, col : col + 2 * c.pad_lg + 1].flatten()])
-    # we pull the first pad + 1 rows and discard the last pad + 1 columns of the last row
-    BBp_feat = np.hstack([B_feat[level][q, :], Bp_feat[:-(c.num_ch * (c.pad_lg + 1))]])
+                         im_lg_padded[row : row + c.pad_lg + 1, col : col + 2 * c.pad_lg + 1].flatten()])
 
-    return BBp_feat
+    if full_feat:
+        return Bp_feat
+    else:
+        # we pull the first pad + 1 rows and discard the last pad + 1 columns of the last row
+        return Bp_feat[:-(c.num_ch * (c.pad_lg + 1))]
 
 
 def best_approximate_match(flann, params, BBp_feat, num_px):
@@ -77,32 +96,51 @@ def extract_coherence_neighborhood(ix_img, row, col, c):
     return set_r
 
 
-def best_coherence_match(As, BBp_feat, s, q, row, col, Bp_ix, c):
-    assert(len(s) >= 1)
-
-    set_r = extract_coherence_neighborhood(Bp_ix, row, col, c)
-    set_p = (s[set_r] + (q - set_r)).astype(int)
-
-    #r_star = np.argmin(norm(As[set_p, :] - BBp_feat, ord=2, axis=1))
+def best_coherence_match(A_pd, Ap_pd, BBp_feat, s, (row, col), c):
+    assert(np.sum(~np.isnan(s)) >= 1)
 
     min_sum = float('inf')
     r_star = np.nan
-    for rix, p in enumerate(set_p):
-        # only use p's that are inside the image
-        if p < As.shape[0]:
-            new_sum = norm(As[p, :] - BBp_feat, ord=2)
+    for r_row in range(row - c.pad_lg, row + 1):
+        for r_col in range(col - c.pad_lg, col + c.pad_lg + 1):
+            # p = s(r) + (q - r)
+            p_r = s[r_row, r_col] + (row, col) - (r_row, r_col)
+            A_feat = extract_pixel_feature(A_pd, p_r, c, full_feat=True)
+            Ap_feat = extract_pixel_feature(Ap_pd, p_r, c, full_feat=False)
+            AAp_feat = np.hstack([A_feat, Ap_feat])
+
+            new_sum = norm(AAp_feat - BBp_feat, ord=2)
             if new_sum < min_sum:
                 min_sum = new_sum
-                r_star = rix
-
+                r_star = (r_row, r_col)
     if np.isnan(r_star):
-        print(row, col, set_r, s[set_r], set_p)
-        return -1 # blue
+        print((row,col), (r_row, r_col), p_r)
 
-    if s[r_star] + (q - r_star) > As.shape[0]:
-        print(row, col, set_r, s[set_r], set_p)
+    return s[r_star[0], r_star[1]] + ((row, col) - r_star)
 
-    return s[r_star] + (q - r_star)
+
+    # set_p = (s[set_r] + (q - set_r)).astype(int)
+    #
+    # #r_star = np.argmin(norm(As[set_p, :] - BBp_feat, ord=2, axis=1))
+    #
+    # min_sum = float('inf')
+    # r_star = np.nan
+    # for rix, p in enumerate(set_p):
+    #     # only use p's that are inside the image
+    #     if p < As.shape[0]:
+    #         new_sum = norm(As[p, :] - BBp_feat, ord=2)
+    #         if new_sum < min_sum:
+    #             min_sum = new_sum
+    #             r_star = rix
+    #
+    # if np.isnan(r_star):
+    #     print(row, col, set_r, s[set_r], set_p)
+    #     return -1 # blue
+    #
+    # if s[r_star] + (q - r_star) > As.shape[0]:
+    #     print(row, col, set_r, s[set_r], set_p)
+    #
+    # return s[r_star] + (q - r_star)
 
 
 def compute_distance(AAp_p, BBp_q, weights):

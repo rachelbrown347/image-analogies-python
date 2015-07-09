@@ -1,6 +1,6 @@
 import numpy as np
 from img_preprocess import compute_gaussian_pyramid
-from texture_analogies import compute_features, extract_Bp_feature, extract_coherence_neighborhood
+from texture_analogies import compute_feature_array, extract_pixel_feature, extract_coherence_neighborhood
 
 import config as c
 
@@ -15,7 +15,7 @@ def test_compute_features():
     # First test a full feature
 
     c.num_ch, c.padding_sm, c.padding_lg, c.weights = c.setup_vars(lg)
-    feat = compute_features([sm, lg], c, full_feat=True)
+    feat = compute_feature_array([sm, lg], c, full_feat=True)
 
     sm_0 = np.array([[0.5, 0.5, 0.5],
                      [0.5,   0, 0.5],
@@ -36,7 +36,7 @@ def test_compute_features():
 
     # Next test a half feature
 
-    feat = compute_features([sm, lg], c, full_feat=False)
+    feat = compute_feature_array([sm, lg], c, full_feat=False)
 
     correct_feat_0 = np.hstack([sm_0.flatten(), lg_0.flatten()[:c.n_half]])
 
@@ -55,7 +55,7 @@ def test_compute_features():
     # First test a full feature
 
     c.num_ch, c.padding_sm, c.padding_lg, c.weights = c.setup_vars(lg)
-    feat = compute_features([sm, lg], c, full_feat=True)
+    feat = compute_feature_array([sm, lg], c, full_feat=True)
 
     sm_3d_0 = np.dstack([sm_0, sm_0, sm_0])
     lg_3d_0 = np.dstack([lg_0, lg_0, lg_0])
@@ -68,7 +68,7 @@ def test_compute_features():
 
     # Next test a half feature
 
-    feat = compute_features([sm, lg], c, full_feat=False)
+    feat = compute_feature_array([sm, lg], c, full_feat=False)
 
     correct_feat_0 = np.hstack([sm_3d_0.flatten(), lg_3d_0.flatten()[:c.n_half * 3]])
 
@@ -110,7 +110,7 @@ def test_extract_Bp_feature():
     correct_BBp_feat = np.hstack([np.array([15, 16, 17, 18, 19]),
                                   correct_feat_0])
 
-    BBp_feat = extract_Bp_feature(Bp_pyr, B_feat, q, level, row, col, c)
+    BBp_feat = extract_pixel_feature(Bp_pyr, B_feat, q, level, row, col, c)
 
     assert(np.allclose(correct_BBp_feat, BBp_feat))
 
