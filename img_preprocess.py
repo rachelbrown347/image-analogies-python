@@ -1,3 +1,4 @@
+import matplotlib.pyplot as plt
 import numpy as np
 from skimage.transform import pyramid_gaussian
 
@@ -22,13 +23,16 @@ def convert_to_RGB(img):
 
 
 def remap_luminance(A, Ap, B):
+    # single channel only
+    assert(len(A.shape) == len(Ap.shape) == len(B.shape) == 2)
+
     m_A = np.mean(A)
     m_B = np.mean(B)
     s_A = np.std(A)
     s_B = np.std(B)
 
-    A_remap  = (m_B/m_A) * ( A - m_A) + m_B
-    Ap_remap = (m_B/m_A) * (Ap - m_A) + m_B
+    A_remap  = (s_B/s_A) * ( A - m_A) + m_B
+    Ap_remap = (s_B/s_A) * (Ap - m_A) + m_B
 
     return A_remap, Ap_remap
 
@@ -51,20 +55,47 @@ def compute_gaussian_pyramid(img, min_size):
     return img_pyr
 
 
-def initialize_Bp(Ap_pyr, init_rand=True):
-    Bp_pyr = [list([]) for _ in xrange(len(Ap_pyr))]
+def initialize_Bp(B_pyr, init_rand=True):
+    Bp_pyr = [list([]) for _ in xrange(len(B_pyr))]
 
     # set all to nan
-    for level in range(len(Ap_pyr)):
-        Bp_pyr[level] = np.nan * Ap_pyr[level]
+    for level in range(len(B_pyr)):
+        Bp_pyr[level] = np.nan * B_pyr[level]
 
     if init_rand:
         for level in [0, 1]:
-            level_shape = Ap_pyr[level].shape
+            level_shape = B_pyr[level].shape
             Bp_pyr[level] = np.random.rand(np.product(level_shape)).reshape(level_shape)
     else:
         # initialize with correct answer
         for level in [0, 1]:
-            Bp_pyr[level] = Ap_pyr[level]
+            Bp_pyr[level] = B_pyr[level]
 
     return Bp_pyr
+
+
+def SaveFigureAsImage(fileName,fig=None,**kwargs):
+    ''' Save a Matplotlib figure as an image without borders or frames.
+        Courtesy of: http://robotics.usc.edu/~ampereir/wordpress/?p=626
+        Args:
+            fileName (str): String that ends in .png etc.
+
+            fig (Matplotlib figure instance): figure you want to save as the image
+        Keyword Args:
+            orig_size (tuple): width, height of the original image used to maintain
+            aspect ratio.
+    '''
+    fig_size = fig.get_size_inches()
+    w,h = fig_size[0], fig_size[1]
+    fig.patch.set_alpha(0)
+    if kwargs.has_key('orig_size'): # Aspect ratio scaling if required
+        w,h = kwargs['orig_size']
+        w2,h2 = fig_size[0],fig_size[1]
+        fig.set_size_inches([(w2/w)*w,(w2/w)*h])
+        fig.set_dpi((w2/w)*fig.get_dpi())
+    a=fig.gca()
+    a.set_frame_on(False)
+    a.set_xticks([]); a.set_yticks([])
+    plt.axis('off')
+    plt.xlim(0,h); plt.ylim(w,0)
+    fig.savefig(fileName, transparent=True, bbox_inches='tight', pad_inches=0, interpolation='nearest')
