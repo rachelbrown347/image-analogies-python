@@ -58,18 +58,14 @@ def compute_gaussian_pyramid(img, min_size):
 def initialize_Bp(B_pyr, init_rand=True):
     Bp_pyr = [list([]) for _ in xrange(len(B_pyr))]
 
-    # set all to nan
     for level in range(len(B_pyr)):
-        Bp_pyr[level] = np.nan * B_pyr[level]
-
-    if init_rand:
-        for level in [0, 1]:
+        if init_rand:
+            # initialize randomly
             level_shape = B_pyr[level].shape
             Bp_pyr[level] = np.random.rand(np.product(level_shape)).reshape(level_shape)
-    else:
-        # initialize with correct answer
-        for level in [0, 1]:
-            Bp_pyr[level] = B_pyr[level]
+        else:
+            # initialize with correct answer
+            Bp_pyr[level] = B_pyr[level].copy()
 
     return Bp_pyr
 

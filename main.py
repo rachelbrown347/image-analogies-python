@@ -117,8 +117,6 @@ if __name__ == '__main__':
 
         imh, imw = Bp_pyr[level].shape[0:2]
 
-        Bp_ix = np.arange(imh*imw).reshape((imh, imw))
-
         # pad each pyramid level to avoid edge problems
         A_sm_padded  = np.pad( A_pyr[level - 1], c.padding_sm, mode='symmetric')
         A_lg_padded  = np.pad( A_pyr[level    ], c.padding_lg, mode='symmetric')
@@ -132,7 +130,7 @@ if __name__ == '__main__':
         B_lg_padded  = np.pad( B_pyr[level    ], c.padding_lg, mode='symmetric')
         B_pd = [B_sm_padded, B_lg_padded]
 
-        s = np.nan * np.ones((imh, imw))
+        s = []
 
         # debugging structures
         p_src    = np.nan * np.ones((imh, imw, 3))
@@ -177,19 +175,19 @@ if __name__ == '__main__':
 
                 # is this the first iteration for this level?
                 # then skip coherence step
-
-                if np.sum(~np.isnan(s)) < 1:
+                if len(s) < 1:
                     p = p_app
                     #p = (randint(Ap_imh), randint(Ap_imw))
 
                 # Find Coherence Match and Compare Distances
 
                 else:
-                    p_coh = best_coherence_match(A_pd, Ap_pd, BBp_feat, s, (row, col), c)
+                    p_coh = best_coherence_match(A_pd, Ap_pd, BBp_feat, s, (row, col, imw), c)
 
-                    if p_coh == -1: # blue
+                    if p_coh == (-1, -1):
                         p = p_app
                         p_src[row, col] = np.array([0, 0, 1])
+                        #print(p_app, p_coh)
                     else:
                         A_feat_app = extract_pixel_feature( A_pd, p_app, c, full_feat=True)
                         Ap_feat_app = extract_pixel_feature(Ap_pd, p_app, c, full_feat=False)
@@ -221,7 +219,7 @@ if __name__ == '__main__':
                 if not artistic_filter:
                     Bp_color_pyr[level][row, col] = Ap_color_pyr[level][p[0], p[1]]
 
-                s[row, col] = p
+                s.append(p)
 
         ann_time_total = ann_time_total + ann_time_level
 

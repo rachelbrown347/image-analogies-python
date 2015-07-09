@@ -4,25 +4,6 @@ from numpy.linalg import norm
 from sklearn.feature_extraction.image import extract_patches_2d
 
 
-def create_index(A_pyr, Ap_pyr, c):
-    A_feat  = compute_feature_array(A_pyr,  c, full_feat=True)
-    Ap_feat = compute_feature_array(Ap_pyr, c, full_feat=False)
-
-    max_levels = len(A_pyr)
-
-    flann = [pf.FLANN() for _ in xrange(max_levels)]
-    flann_params = [list([]) for _ in xrange(max_levels)]
-    As_size = [list([]) for _ in xrange(max_levels)]
-    for level in range(1, max_levels):
-        As = np.hstack([A_feat[level], Ap_feat[level]])
-        As_size[level] = As.shape
-        flann_params[level] = flann[level].build_index(As[level],
-                                                       algorithm='autotuned',
-                                                       target_precision=0.9,
-                                                       sample_fraction=0.5)
-    return flann, flann_params, As_size
-
-
 def compute_feature_array(im_pyr, c, full_feat):
     # features will be organized like this:
     # sm_imA, lg_imA (channels shuffled C-style)
@@ -63,18 +44,21 @@ def compute_feature_array(im_pyr, c, full_feat):
     return im_features
 
 
-def extract_pixel_feature((im_sm_padded, im_lg_padded), (row, col), c, full_feat):
-    # Extract B/Bp Feature Vector
+def create_index(A_pyr, Ap_pyr, c):
+    A_feat  = compute_feature_array(A_pyr,  c, full_feat=True)
+    Ap_feat = compute_feature_array(Ap_pyr, c, full_feat=False)
 
-    Bp_feat = np.hstack([im_sm_padded[np.floor(row/2.) : np.floor(row/2.) + 2 * c.pad_sm + 1, \
-                               np.floor(col/2.) : np.floor(col/2.) + 2 * c.pad_sm + 1].flatten(),
-                         im_lg_padded[row : row + c.pad_lg + 1, col : col + 2 * c.pad_lg + 1].flatten()])
+    max_levels = len(A_pyr)
 
-    if full_feat:
-        return Bp_feat
-    else:
-        # we pull the first pad + 1 rows and discard the last pad + 1 columns of the last row
-        return Bp_feat[:-(c.num_ch * (c.pad_lg + 1))]
+    flann = [pf.FLANN() for _ in xrange(max_levels)]
+    flann_params = [list([]) for _ in xrange(max_levels)]
+    As_size = [list([]) for _ in xrange(max_levels)]
+    for level in range(1, max_levels):
+        print('Building index for level %d out of %d' % (level, max_levels))
+        As = np.hstack([A_feat[level], Ap_feat[level]])
+        As_size[level] = As.shape
+        flann_params[level] = flann[level].build_index(As)
+    return flann, flann_params, As_size
 
 
 def best_approximate_match(flann, params, BBp_feat, num_px):
@@ -83,40 +67,67 @@ def best_approximate_match(flann, params, BBp_feat, num_px):
     return result[0]
 
 
-def extract_coherence_neighborhood(ix_img, row, col, c):
-    imh, imw = ix_img.shape
+def extract_pixel_feature((im_sm_padded, im_lg_padded), (row, col), c, full_feat):
+    # first extract full feature vector
+    # since the images are padded, we need to add the padding to our indexing
+    px_feat = np.hstack([im_sm_padded[np.floor(row/2.) : np.floor(row/2.) + 2 * c.pad_sm + 1, \
+                                      np.floor(col/2.) : np.floor(col/2.) + 2 * c.pad_sm + 1].flatten(),
+                         im_lg_padded[row : row + 2 * c.pad_lg + 1,
+                                      col : col + 2 * c.pad_lg + 1].flatten()])
+    if full_feat:
+        return px_feat
+    else:
+        # only keep c.n_half pixels from second level
+        return px_feat[:c.num_ch * ((c.n_sm * c.n_sm) + c.n_half)]
 
-    # search through all synthesized pixels within most recent half-neighborhood
+
+def best_coherence_match(A_pd, Ap_pd, BBp_feat, s, (row, col, Bp_w), c):
+    assert(len(s) >= 1)
+
+    # Handle edge cases
     row_start = 0 if row - c.pad_lg <= 0 else row - c.pad_lg
     col_start = 0 if col - c.pad_lg <= 0 else col - c.pad_lg
-    col_end = imw if col + c.pad_lg >= imw else col + c.pad_lg
-    neigh_end = col - imw if col - imw > - c.pad_lg - 1 else - c.pad_lg - 1
-    set_r = ix_img[row_start: row + 1, col_start: col_end + 1].flatten()[:neigh_end]
+    col_end = Bp_w if col + c.pad_lg >= Bp_w else col + c.pad_lg
 
-    return set_r
-
-
-def best_coherence_match(A_pd, Ap_pd, BBp_feat, s, (row, col), c):
-    assert(np.sum(~np.isnan(s)) >= 1)
+    #print('row, col, Bp_w, s: ', row, col, Bp_w, s)
+    #print('row_range: ', np.arange(row_start, row + 1, dtype=int))
 
     min_sum = float('inf')
-    r_star = np.nan
-    for r_row in range(row - c.pad_lg, row + 1):
-        for r_col in range(col - c.pad_lg, col + c.pad_lg + 1):
+    r_star = None
+    for r_row in np.arange(row_start, row + 1, dtype=int):
+
+        #print('col_range: ', np.arange(col_start, col_end if r_row != row else col, dtype=int))
+
+        for r_col in np.arange(col_start, col_end if r_row != row else col, dtype=int):
+            s_ix = r_row * Bp_w + r_col
+
+            #print('s_ix, rrow, rcol: ', s_ix, r_row, r_col)
+
             # p = s(r) + (q - r)
-            p_r = s[r_row, r_col] + (row, col) - (r_row, r_col)
-            A_feat = extract_pixel_feature(A_pd, p_r, c, full_feat=True)
-            Ap_feat = extract_pixel_feature(Ap_pd, p_r, c, full_feat=False)
-            AAp_feat = np.hstack([A_feat, Ap_feat])
+            p_r = np.array(s[s_ix]) + np.array([row, col]) - np.array([r_row, r_col])
 
-            new_sum = norm(AAp_feat - BBp_feat, ord=2)
-            if new_sum < min_sum:
-                min_sum = new_sum
-                r_star = (r_row, r_col)
-    if np.isnan(r_star):
-        print((row,col), (r_row, r_col), p_r)
+            # check that p_r is inside the bounds of A/Ap
+            A_h, A_w = A_pd[1].shape - 2 * c.pad_lg
 
-    return s[r_star[0], r_star[1]] + ((row, col) - r_star)
+            #print('Ashape: ', A_pd[1].shape, A_h, A_w)
+            #print('pr', p_r)
+
+            if 0 <= p_r[0] < A_h and 0 <= p_r[1] < A_w:
+                A_feat = extract_pixel_feature(A_pd, p_r, c, full_feat=True)
+                Ap_feat = extract_pixel_feature(Ap_pd, p_r, c, full_feat=False)
+
+                AAp_feat = np.hstack([A_feat, Ap_feat])
+                assert(AAp_feat.shape == BBp_feat.shape)
+
+                new_sum = norm(AAp_feat - BBp_feat, ord=2)
+
+                if new_sum < min_sum:
+                    min_sum = new_sum
+                    r_star = np.array([r_row, r_col])
+    if r_star == None:
+        #print(AAp_feat, BBp_feat)
+        return (-1, -1)
+    return tuple(s[r_star[0] * Bp_w + r_star[1]] + (np.array([row, col]) - r_star))
 
 
     # set_p = (s[set_r] + (q - set_r)).astype(int)
