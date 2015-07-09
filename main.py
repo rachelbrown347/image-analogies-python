@@ -32,7 +32,7 @@ if __name__ == '__main__':
     A_orig = plt.imread('./images/lf_originals/half_size/fruit-src.jpg')
     Ap_orig = plt.imread('./images/lf_originals/half_size/fruit-filt.jpg')
     B_orig = plt.imread('./images/lf_originals/half_size/boat-src.jpg')
-    out_path = './images/lf_originals/output/boat/'
+    out_path = './images/lf_originals/output/boat/fruit_k_/'
 
     # A_orig = plt.imread('./images/crosshatch/crosshatch_blurred.jpg')
     # Ap_orig = plt.imread('./images/crosshatch/crosshatch.jpg')
@@ -43,8 +43,6 @@ if __name__ == '__main__':
     # Ap_orig = plt.imread('./../sample-images/analogies/real_wood_orig_sm.jpg')
     # B_orig = plt.imread('./../sample-images/analogies/wood_relit_sm_2p5_2.jpg')
     # Bp_fname = './../sample-images/analogies/output/real_wood_relit_sm_2p5_2_k25.jpg'
-
-    artistic_filter = True
 
     assert(A_orig.shape == Ap_orig.shape)
     assert(len(A_orig.shape) == len(B_orig.shape)) # same number of channels
@@ -79,16 +77,13 @@ if __name__ == '__main__':
     A_pyr  = compute_gaussian_pyramid( A, c.n_sm)
     Ap_pyr = compute_gaussian_pyramid(Ap, c.n_sm)
     B_pyr  = compute_gaussian_pyramid( B, c.n_sm)
+    B_color_pyr = compute_gaussian_pyramid(B_yiq, c.n_sm)
 
     if len(A_pyr) != len(B_pyr):
         max_levels = min(len(A_pyr), len(B_pyr))
         warnings.warn('Warning: input images are very different sizes! The minimum number of levels will be used.')
     else:
         max_levels = len(B_pyr)
-
-    if not artistic_filter:
-        Ap_color_pyr = compute_gaussian_pyramid(Ap_orig, c.n_sm)
-        Bp_color_pyr = compute_gaussian_pyramid(np.nan * np.ones(B_orig.shape), c.n_sm)
 
     # Create Random Initialization of Bp
 
@@ -216,9 +211,6 @@ if __name__ == '__main__':
 
                 Bp_pyr[level][row, col] = p_val
 
-                if not artistic_filter:
-                    Bp_color_pyr[level][row, col] = Ap_color_pyr[level][p[0], p[1]]
-
                 s.append(p)
 
         ann_time_total = ann_time_total + ann_time_level
@@ -232,31 +224,14 @@ if __name__ == '__main__':
             plt.savefig(out_path + path, bbox_inches='tight', pad_inches=0) #
             plt.close()
 
-        #plt.imsave(Bp_fname[:-4] + '_bw.jpg', Bp_pyr[level], cmap='gray')
+        im_out = convert_to_RGB(np.dstack([Bp_pyr[level], B_color_pyr[level][:, :, 1:]]))
+        im_out = np.clip(im_out, 0, 1)
+        plt.imsave(out_path + 'im_out_color_%d.jpg' % level, im_out)
 
         stop_time = time.time()
         print 'Level %d time: %f' % (level, stop_time - start_time)
         print('Level %d ANN time: %f' % (level, ann_time_level))
 
-    # Output Image
-
-    if artistic_filter:
-        #im_out = convert_to_RGB(np.dstack([Bp_pyr[-1], B_yiq[:, :, 1:]]))
-        #im_out = np.clip(im_out, 0, 1)
-        im_out = Bp_pyr[-1]
-    else:
-        im_out = Bp_color_pyr[-1]
-
-    # if c.convert:
-    #     im_out = convert_to_RGB(Bp_color_pyr[-1])
-    # else:
-    #     im_out = Bp_pyr[-1]
-
     end_time = time.time()
     print 'Total time: %f' % (end_time - begin_time)
     print('ANN time: %f' % ann_time_total)
-
-    #plt.imshow(im_out)
-    #plt.show()
-
-    #plt.imsave(Bp_fname, im_out, cmap='gray')

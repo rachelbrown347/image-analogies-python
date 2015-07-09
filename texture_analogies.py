@@ -57,7 +57,7 @@ def create_index(A_pyr, Ap_pyr, c):
         print('Building index for level %d out of %d' % (level, max_levels))
         As = np.hstack([A_feat[level], Ap_feat[level]])
         As_size[level] = As.shape
-        flann_params[level] = flann[level].build_index(As)
+        flann_params[level] = flann[level].build_index(As, algorithm='kmeans')
     return flann, flann_params, As_size
 
 
@@ -89,28 +89,17 @@ def best_coherence_match(A_pd, Ap_pd, BBp_feat, s, (row, col, Bp_w), c):
     col_start = 0 if col - c.pad_lg <= 0 else col - c.pad_lg
     col_end = Bp_w if col + c.pad_lg >= Bp_w else col + c.pad_lg
 
-    #print('row, col, Bp_w, s: ', row, col, Bp_w, s)
-    #print('row_range: ', np.arange(row_start, row + 1, dtype=int))
-
     min_sum = float('inf')
     r_star = None
     for r_row in np.arange(row_start, row + 1, dtype=int):
-
-        #print('col_range: ', np.arange(col_start, col_end if r_row != row else col, dtype=int))
-
         for r_col in np.arange(col_start, col_end if r_row != row else col, dtype=int):
             s_ix = r_row * Bp_w + r_col
-
-            #print('s_ix, rrow, rcol: ', s_ix, r_row, r_col)
 
             # p = s(r) + (q - r)
             p_r = np.array(s[s_ix]) + np.array([row, col]) - np.array([r_row, r_col])
 
             # check that p_r is inside the bounds of A/Ap
             A_h, A_w = A_pd[1].shape - 2 * c.pad_lg
-
-            #print('Ashape: ', A_pd[1].shape, A_h, A_w)
-            #print('pr', p_r)
 
             if 0 <= p_r[0] < A_h and 0 <= p_r[1] < A_w:
                 A_feat = extract_pixel_feature(A_pd, p_r, c, full_feat=True)
@@ -125,33 +114,9 @@ def best_coherence_match(A_pd, Ap_pd, BBp_feat, s, (row, col, Bp_w), c):
                     min_sum = new_sum
                     r_star = np.array([r_row, r_col])
     if r_star == None:
-        #print(AAp_feat, BBp_feat)
         return (-1, -1)
+    
     return tuple(s[r_star[0] * Bp_w + r_star[1]] + (np.array([row, col]) - r_star))
-
-
-    # set_p = (s[set_r] + (q - set_r)).astype(int)
-    #
-    # #r_star = np.argmin(norm(As[set_p, :] - BBp_feat, ord=2, axis=1))
-    #
-    # min_sum = float('inf')
-    # r_star = np.nan
-    # for rix, p in enumerate(set_p):
-    #     # only use p's that are inside the image
-    #     if p < As.shape[0]:
-    #         new_sum = norm(As[p, :] - BBp_feat, ord=2)
-    #         if new_sum < min_sum:
-    #             min_sum = new_sum
-    #             r_star = rix
-    #
-    # if np.isnan(r_star):
-    #     print(row, col, set_r, s[set_r], set_p)
-    #     return -1 # blue
-    #
-    # if s[r_star] + (q - r_star) > As.shape[0]:
-    #     print(row, col, set_r, s[set_r], set_p)
-    #
-    # return s[r_star] + (q - r_star)
 
 
 def compute_distance(AAp_p, BBp_q, weights):
