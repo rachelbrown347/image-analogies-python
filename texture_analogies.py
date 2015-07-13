@@ -4,6 +4,11 @@ from numpy.linalg import norm
 from sklearn.feature_extraction.image import extract_patches_2d
 
 
+def pad_img(img_sm, img_lg, c):
+    return [np.pad(img_sm, c.padding_sm, mode='symmetric'),
+            np.pad(img_lg, c.padding_lg, mode='symmetric')]
+
+
 def compute_feature_array(im_pyr, c, full_feat):
     # features will be organized like this:
     # sm_imA, lg_imA (channels shuffled C-style)
@@ -14,8 +19,7 @@ def compute_feature_array(im_pyr, c, full_feat):
 
     # pad each pyramid level to avoid edge problems
     for level in range(1, len(im_pyr)):
-        padded_sm = np.pad(im_pyr[level - 1], c.padding_sm, mode='symmetric')
-        padded_lg = np.pad(im_pyr[level    ], c.padding_lg, mode='symmetric')
+        padded_sm, padded_lg = pad_img(im_pyr[level - 1], im_pyr[level], c)
 
         patches_sm = extract_patches_2d(padded_sm, (c.n_sm, c.n_sm))
         patches_lg = extract_patches_2d(padded_lg, (c.n_lg, c.n_lg))
@@ -54,20 +58,22 @@ def create_index(A_pyr, Ap_pyr, c):
     flann_params = [list([]) for _ in xrange(max_levels)]
     As_size = [list([]) for _ in xrange(max_levels)]
     for level in range(1, max_levels):
-        print('Building index for level %d out of %d' % (level, max_levels))
+        print('Building index for level %d out of %d' % (level, max_levels - 1))
         As = np.hstack([A_feat[level], Ap_feat[level]])
         As_size[level] = As.shape
-        flann_params[level] = flann[level].build_index(As, algorithm='kmeans')
+        flann_params[level] = flann[level].build_index(As, algorithm='composite')
     return flann, flann_params, As_size
 
 
-def best_approximate_match(flann, params, BBp_feat, num_px):
+def best_approximate_match(flann, params, BBp_feat):
     result, dists = flann.nn_index(BBp_feat, 1, checks=params['checks'])
-    assert(result[0] < num_px)
     return result[0]
 
 
 def extract_pixel_feature((im_sm_padded, im_lg_padded), (row, col), c, full_feat):
+    # Single channel only
+    assert(len(im_sm_padded.shape) == 2)
+
     # first extract full feature vector
     # since the images are padded, we need to add the padding to our indexing
     px_feat = np.hstack([im_sm_padded[np.floor(row/2.) : np.floor(row/2.) + 2 * c.pad_sm + 1, \
@@ -102,24 +108,26 @@ def best_coherence_match(A_pd, Ap_pd, BBp_feat, s, (row, col, Bp_w), c):
             A_h, A_w = A_pd[1].shape - 2 * c.pad_lg
 
             if 0 <= p_r[0] < A_h and 0 <= p_r[1] < A_w:
-                A_feat = extract_pixel_feature(A_pd, p_r, c, full_feat=True)
+                A_feat  = extract_pixel_feature( A_pd, p_r, c, full_feat=True)
                 Ap_feat = extract_pixel_feature(Ap_pd, p_r, c, full_feat=False)
 
                 AAp_feat = np.hstack([A_feat, Ap_feat])
                 assert(AAp_feat.shape == BBp_feat.shape)
 
-                new_sum = norm(AAp_feat - BBp_feat, ord=2)
+                new_sum = norm(AAp_feat - BBp_feat, ord=2)**2
 
-                if new_sum < min_sum:
+                if new_sum <= min_sum:
                     min_sum = new_sum
                     r_star = np.array([r_row, r_col])
     if r_star == None:
         return (-1, -1)
-    
+
     return tuple(s[r_star[0] * Bp_w + r_star[1]] + (np.array([row, col]) - r_star))
 
 
 def compute_distance(AAp_p, BBp_q, weights):
-    diff = (AAp_p - BBp_q) * weights
-    return np.sum((np.abs(diff))**2)
-
+    assert(AAp_p.shape == BBp_q.shape == weights.shape)
+    # assert(np.allclose(norm((AAp_p - BBp_q) * weights, ord=2),
+    #                    np.sum(np.abs(((AAp_p - BBp_q)*weights)**2)), atol=0.05))
+    return norm((AAp_p - BBp_q) * weights, ord=2)**2
+    #return np.sum(np.abs(((AAp_p - BBp_q)*weights)**2))

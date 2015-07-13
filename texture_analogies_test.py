@@ -1,10 +1,11 @@
 import numpy as np
-from img_preprocess import compute_gaussian_pyramid
-from texture_analogies import compute_feature_array, extract_pixel_feature, extract_coherence_neighborhood
+import matplotlib.pyplot as plt
+from img_preprocess import convert_to_YIQ, compute_gaussian_pyramid
+from texture_analogies import pad_img, compute_feature_array, extract_pixel_feature, best_coherence_match
 
 import config as c
 
-def test_compute_features():
+def test_compute_feature_array():
     # Make and test 2D image
 
     sm = 0.5 * np.ones((4, 5))
@@ -17,13 +18,13 @@ def test_compute_features():
     c.num_ch, c.padding_sm, c.padding_lg, c.weights = c.setup_vars(lg)
     feat = compute_feature_array([sm, lg], c, full_feat=True)
 
-    sm_0 = np.array([[0.5, 0.5, 0.5],
-                     [0.5,   0, 0.5],
+    sm_0 = np.array([[  0,   0, 0.5],
+                     [  0,   0, 0.5],
                      [0.5, 0.5, 0.5]])
 
     lg_0 = np.array([[0.3, 0.3, 0.3, 0.3, 0.3],
-                     [0.3, 0.3, 0.3, 0.3, 0.3],
-                     [0.3, 0.3,   1, 0.3, 0.3],
+                     [0.3,   1,   1, 0.3, 0.3],
+                     [0.3,   1,   1, 0.3, 0.3],
                      [0.3, 0.3, 0.3, 0.3, 0.3],
                      [0.3, 0.3, 0.3, 0.3, 0.3]])
 
@@ -78,7 +79,7 @@ def test_compute_features():
     assert(np.allclose(feat[1][0], correct_feat_0))
 
 
-def test_extract_Bp_feature():
+def test_extract_pixel_feature():
     # Make and test 2D image
     sm = 0.5 * np.ones((4, 5))
     sm[0, 0] = 0
@@ -87,58 +88,74 @@ def test_extract_Bp_feature():
 
     c.num_ch, c.padding_sm, c.padding_lg, c.weights = c.setup_vars(lg)
 
-    sm_0 = np.array([[0.5, 0.5, 0.5],
-                     [0.5,   0, 0.5],
+    sm_0 = np.array([[  0,   0, 0.5],
+                     [  0,   0, 0.5],
                      [0.5, 0.5, 0.5]])
 
     lg_0 = np.array([[0.3, 0.3, 0.3, 0.3, 0.3],
-                     [0.3, 0.3, 0.3, 0.3, 0.3],
-                     [0.3, 0.3,   1, 0.3, 0.3],
+                     [0.3,   1,   1, 0.3, 0.3],
+                     [0.3,   1,   1, 0.3, 0.3],
                      [0.3, 0.3, 0.3, 0.3, 0.3],
                      [0.3, 0.3, 0.3, 0.3, 0.3]])
 
-    correct_feat_0 = np.hstack([sm_0.flatten(), lg_0.flatten()[:c.n_half]])
+    im_padded = pad_img(sm, lg, c)
 
-    Bp_pyr = [sm, lg]
-    B_feat = [np.array([[0, 1, 2, 3, 4],
-                        [5, 6, 7, 8, 9]]),
-              np.array([[10, 11, 12, 13, 14],
-                        [15, 16, 17, 18, 19]])]
+    # First test full feature
 
-    q, level, row, col = [1, 1, 0, 0]
+    correct_feat_0_0 = np.hstack([sm_0.flatten(), lg_0.flatten()])
+    feat = extract_pixel_feature(im_padded, (0, 0), c, full_feat=True)
+    assert(np.allclose(feat, correct_feat_0_0))
 
-    correct_BBp_feat = np.hstack([np.array([15, 16, 17, 18, 19]),
-                                  correct_feat_0])
+    # Now test half feature
 
-    BBp_feat = extract_pixel_feature(Bp_pyr, B_feat, q, level, row, col, c)
-
-    assert(np.allclose(correct_BBp_feat, BBp_feat))
+    correct_feat_0_0 = np.hstack([sm_0.flatten(), lg_0.flatten()[:c.n_half]])
+    feat = extract_pixel_feature(im_padded, (0, 0), c, full_feat=False)
+    assert(np.allclose(feat, correct_feat_0_0))
 
 
-def test_extract_coherence_neighborhood():
-    img = np.arange(5 * 4).reshape((5, 4))
-    imh, imw = img.shape
+def test_best_coherence_match():
+    # make A_pd, Ap_pd, BBp_feat, s
+    A_orig  = plt.imread('./test_images/test_best_coherence_match_A.jpg')
+    Ap_orig = plt.imread('./test_images/test_best_coherence_match_Ap.jpg')
 
-    c.num_ch, c.padding_sm, c.padding_lg, c.weights = c.setup_vars(img)
+    A  = convert_to_YIQ( A_orig/255.)[:, :, 0]
+    Ap = convert_to_YIQ(Ap_orig/255.)[:, :, 0]
 
-    tests = [(0, 1),
-             (0, imw - 1),
-             (imh - 1, 0),
-             (imh - 1, imw - 1),
-             (np.floor(imh/2.), np.floor(imw/2.))]
+    A_pyr  = compute_gaussian_pyramid( A, min_size=3)
+    Ap_pyr = compute_gaussian_pyramid(Ap, min_size=3)
 
-    answers = [np.array([0]),
-               np.array([1, 2]),
-               np.array([8, 9, 10, 12, 13, 14]),
-               np.array([9, 10, 11, 13, 14, 15, 17, 18]),
-               np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])]
+    imh, imw = A.shape[:2]
 
-    for (row, col), answer in zip(tests, answers):
-        neighborhood = extract_coherence_neighborhood(img, row, col, c)
+    c.num_ch, c.padding_sm, c.padding_lg, c.weights = c.setup_vars(A)
 
-        assert np.allclose(neighborhood, answer)
+    A_pd  = pad_img( A_pyr[-2],  A_pyr[-1], c)
+    Ap_pd = pad_img(Ap_pyr[-2], Ap_pyr[-1], c)
 
+    # BBp_feat cases: all corners and middle
+    indices = [(1, 1),
+               (1, imw - 1),
+               (imh - 1, 1),
+               (imh - 1, imw - 1),
+               (np.floor(imh/2.).astype(int), np.floor(imw/2.).astype(int))]
 
+    for row, col in indices:
+        num_px = row * imw + col
+        s_rows = np.random.random_integers(num_px, size=num_px) - 1
+        s_cols = np.random.random_integers(num_px, size=num_px) - 1
+        s = [(rr, cc) for rr, cc in zip(s_rows, s_cols)]
+        s[(row - 1) * imw + col - 1] = (row - 1, col - 1)
 
+        Bs_feat = np.hstack([extract_pixel_feature( A_pd, (row, col), c, full_feat=True),
+                             extract_pixel_feature(Ap_pd, (row, col), c, full_feat=False)])
 
+        p_coh = best_coherence_match(A_pd, Ap_pd, Bs_feat, s, (row, col, imw), c)
 
+        try:
+            assert(p_coh == (row, col))
+        except:
+            print('row, col, p_coh, s', row, col, p_coh, s)
+            As_feat = np.hstack([extract_pixel_feature( A_pd, p_coh, c, full_feat=True),
+                                 extract_pixel_feature(Ap_pd, p_coh, c, full_feat=False)])
+            print('As_feat', As_feat)
+            print('Bs_feat', Bs_feat)
+            assert(False)

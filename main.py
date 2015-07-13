@@ -5,7 +5,7 @@ import time
 import warnings
 
 from img_preprocess import convert_to_YIQ, convert_to_RGB, compute_gaussian_pyramid, initialize_Bp, remap_luminance
-from texture_analogies import create_index, extract_pixel_feature, best_approximate_match, best_coherence_match, compute_distance
+from texture_analogies import pad_img, create_index, extract_pixel_feature, best_approximate_match, best_coherence_match, compute_distance
 import config as c
 
 
@@ -32,12 +32,12 @@ if __name__ == '__main__':
     A_orig = plt.imread('./images/lf_originals/half_size/fruit-src.jpg')
     Ap_orig = plt.imread('./images/lf_originals/half_size/fruit-filt.jpg')
     B_orig = plt.imread('./images/lf_originals/half_size/boat-src.jpg')
-    out_path = './images/lf_originals/output/boat/fruit_k_/'
+    out_path = './images/lf_originals/output/boat/ann_only_composite_2/'
 
     # A_orig = plt.imread('./images/crosshatch/crosshatch_blurred.jpg')
     # Ap_orig = plt.imread('./images/crosshatch/crosshatch.jpg')
     # B_orig = plt.imread('./images/crosshatch/piano_gradient.jpg')
-    # out_path = './images/crosshatch/output/test_3/'
+    # out_path = './images/crosshatch/output/no_coh/'
 
     # A_orig = plt.imread('./../sample-images/analogies/wood_orig_sm.jpg')
     # Ap_orig = plt.imread('./../sample-images/analogies/real_wood_orig_sm.jpg')
@@ -113,17 +113,9 @@ if __name__ == '__main__':
         imh, imw = Bp_pyr[level].shape[0:2]
 
         # pad each pyramid level to avoid edge problems
-        A_sm_padded  = np.pad( A_pyr[level - 1], c.padding_sm, mode='symmetric')
-        A_lg_padded  = np.pad( A_pyr[level    ], c.padding_lg, mode='symmetric')
-        A_pd = [A_sm_padded, A_lg_padded]
-
-        Ap_sm_padded = np.pad(Ap_pyr[level - 1], c.padding_sm, mode='symmetric')
-        Ap_lg_padded = np.pad(Ap_pyr[level    ], c.padding_lg, mode='symmetric')
-        Ap_pd = [Ap_sm_padded, Ap_lg_padded]
-
-        B_sm_padded  = np.pad( B_pyr[level - 1], c.padding_sm, mode='symmetric')
-        B_lg_padded  = np.pad( B_pyr[level    ], c.padding_lg, mode='symmetric')
-        B_pd = [B_sm_padded, B_lg_padded]
+        A_pd  = pad_img( A_pyr[level - 1],  A_pyr[level], c)
+        Ap_pd = pad_img(Ap_pyr[level - 1], Ap_pyr[level], c)
+        B_pd  = pad_img( B_pyr[level - 1],  B_pyr[level], c)
 
         s = []
 
@@ -142,22 +134,20 @@ if __name__ == '__main__':
             for col in range(imw):
                 # pad each pyramid level to avoid edge problems
                 # could be done outside the loop with tricks
-                Bp_sm_padded = np.pad(Bp_pyr[level - 1], c.padding_sm, mode='symmetric')
-                Bp_lg_padded = np.pad(Bp_pyr[level    ], c.padding_lg, mode='symmetric')
-                Bp_pd = [Bp_sm_padded, Bp_lg_padded]
+                Bp_pd = pad_img(Bp_pyr[level - 1], Bp_pyr[level], c)
 
                 B_feat  = extract_pixel_feature( B_pd, (row, col), c, full_feat=True)
                 Bp_feat = extract_pixel_feature(Bp_pd, (row, col), c, full_feat=False)
 
                 BBp_feat = np.hstack([B_feat, Bp_feat])
-
                 assert(BBp_feat.shape == (As_size[level][1],))
 
                 # Find Approx Nearest Neighbor
 
                 ann_start_time = time.time()
 
-                p_app_ix = best_approximate_match(flann[level], flann_params[level], BBp_feat, As_size[level][0])
+                p_app_ix = best_approximate_match(flann[level], flann_params[level], BBp_feat)
+                assert(p_app_ix < As_size[level][0])
 
                 ann_stop_time = time.time()
                 ann_time_level = ann_time_level + ann_stop_time - ann_start_time
@@ -170,7 +160,8 @@ if __name__ == '__main__':
 
                 # is this the first iteration for this level?
                 # then skip coherence step
-                if len(s) < 1:
+                #if len(s) < 1:
+                if True:
                     p = p_app
                     #p = (randint(Ap_imh), randint(Ap_imw))
 
@@ -198,14 +189,14 @@ if __name__ == '__main__':
                         app_dist[row, col] = d_app
                         coh_dist[row, col] = d_coh
 
-                        if d_coh <= d_app * (1 + 2**(level - max_levels) * c.k):
+                        if d_coh <= d_app * (1 + (2**(level - max_levels - 1)) * c.k):
                             p = p_coh
                             p_src[row, col] = np.array([1, 1, 0])
                         else:
                             p = p_app
                             p_src[row, col] = np.array([1, 0, 0])
 
-                p_val = Ap_pyr[level][p[0], p[1]]
+                p_val = Ap_pyr[level][p]
 
                 # Set Bp and Update s
 
