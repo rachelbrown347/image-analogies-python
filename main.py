@@ -1,6 +1,6 @@
-import numpy as np
-from numpy.random import randint
 import matplotlib.pyplot as plt
+import numpy as np
+import pickle
 import time
 import warnings
 
@@ -32,7 +32,7 @@ if __name__ == '__main__':
     A_orig = plt.imread('./images/lf_originals/half_size/fruit-src.jpg')
     Ap_orig = plt.imread('./images/lf_originals/half_size/fruit-filt.jpg')
     B_orig = plt.imread('./images/lf_originals/half_size/boat-src.jpg')
-    out_path = './images/lf_originals/output/boat/ann_only_composite_2/'
+    out_path = './images/lf_originals/output/boat/full_alg_kmeans_2_test/'
 
     # A_orig = plt.imread('./images/crosshatch/crosshatch_blurred.jpg')
     # Ap_orig = plt.imread('./images/crosshatch/crosshatch.jpg')
@@ -118,6 +118,8 @@ if __name__ == '__main__':
         B_pd  = pad_img( B_pyr[level - 1],  B_pyr[level], c)
 
         s = []
+        s_a = []
+        s_c = []
 
         # debugging structures
         p_src    = np.nan * np.ones((imh, imw, 3))
@@ -157,13 +159,15 @@ if __name__ == '__main__':
                 p_app_col = p_app_ix % Ap_imw
                 p_app_row = (p_app_ix - p_app_col) // Ap_imw
                 p_app = (p_app_row, p_app_col)
+                s_a.append(p_app)
 
                 # is this the first iteration for this level?
                 # then skip coherence step
-                #if len(s) < 1:
-                if True:
+                if len(s) < 1:
+                #if True:
                     p = p_app
-                    #p = (randint(Ap_imh), randint(Ap_imw))
+                    s_c.append(p_app)
+                    p_src[row, col] = np.array([1, 0, 0])
 
                 # Find Coherence Match and Compare Distances
 
@@ -171,10 +175,14 @@ if __name__ == '__main__':
                     p_coh = best_coherence_match(A_pd, Ap_pd, BBp_feat, s, (row, col, imw), c)
 
                     if p_coh == (-1, -1):
+                        s_c.append(p_app)
+
                         p = p_app
-                        p_src[row, col] = np.array([0, 0, 1])
-                        #print(p_app, p_coh)
+                        p_src[row, col] = np.array([0, 0, 0])
+
                     else:
+                        s_c.append(p_coh)
+
                         A_feat_app = extract_pixel_feature( A_pd, p_app, c, full_feat=True)
                         Ap_feat_app = extract_pixel_feature(Ap_pd, p_app, c, full_feat=False)
                         AAp_feat_app = np.hstack([A_feat_app, Ap_feat_app])
@@ -218,6 +226,9 @@ if __name__ == '__main__':
         im_out = convert_to_RGB(np.dstack([Bp_pyr[level], B_color_pyr[level][:, :, 1:]]))
         im_out = np.clip(im_out, 0, 1)
         plt.imsave(out_path + 'im_out_color_%d.jpg' % level, im_out)
+
+        with open(out_path + '%d_srcs.pickle' % level, 'w') as f:
+            pickle.dump([s_a, s_c, s], f)
 
         stop_time = time.time()
         print 'Level %d time: %f' % (level, stop_time - start_time)

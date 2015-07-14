@@ -61,7 +61,7 @@ def create_index(A_pyr, Ap_pyr, c):
         print('Building index for level %d out of %d' % (level, max_levels - 1))
         As = np.hstack([A_feat[level], Ap_feat[level]])
         As_size[level] = As.shape
-        flann_params[level] = flann[level].build_index(As, algorithm='composite')
+        flann_params[level] = flann[level].build_index(As, algorithm='kmeans')
     return flann, flann_params, As_size
 
 
@@ -91,27 +91,28 @@ def best_coherence_match(A_pd, Ap_pd, BBp_feat, s, (row, col, Bp_w), c):
     assert(len(s) >= 1)
 
     # Handle edge cases
-    row_start = 0 if row - c.pad_lg <= 0 else row - c.pad_lg
-    col_start = 0 if col - c.pad_lg <= 0 else col - c.pad_lg
-    col_end = Bp_w if col + c.pad_lg >= Bp_w else col + c.pad_lg
+    row_min = np.min([0, row - c.pad_lg])
+    row_max = row + 1
+    col_min = np.min([0, col - c.pad_lg])
+    col_max = np.max([Bp_w, col + c.pad_lg + 1])
 
     min_sum = float('inf')
     r_star = None
-    for r_row in np.arange(row_start, row + 1, dtype=int):
-        for r_col in np.arange(col_start, col_end if r_row != row else col, dtype=int):
+    for r_row in np.arange(row_min, row_max, dtype=int):
+        col_end = col if r_row == row else col_max
+        for r_col in np.arange(col_min, col_end, dtype=int):
             s_ix = r_row * Bp_w + r_col
 
             # p = s(r) + (q - r)
             p_r = np.array(s[s_ix]) + np.array([row, col]) - np.array([r_row, r_col])
 
-            # check that p_r is inside the bounds of A/Ap
+            # check that p_r is inside the bounds of A/Ap lg
             A_h, A_w = A_pd[1].shape - 2 * c.pad_lg
 
             if 0 <= p_r[0] < A_h and 0 <= p_r[1] < A_w:
-                A_feat  = extract_pixel_feature( A_pd, p_r, c, full_feat=True)
-                Ap_feat = extract_pixel_feature(Ap_pd, p_r, c, full_feat=False)
+                AAp_feat = np.hstack([extract_pixel_feature( A_pd, p_r, c, full_feat=True),
+                                      extract_pixel_feature(Ap_pd, p_r, c, full_feat=False)])
 
-                AAp_feat = np.hstack([A_feat, Ap_feat])
                 assert(AAp_feat.shape == BBp_feat.shape)
 
                 new_sum = norm(AAp_feat - BBp_feat, ord=2)**2
@@ -122,12 +123,11 @@ def best_coherence_match(A_pd, Ap_pd, BBp_feat, s, (row, col, Bp_w), c):
     if r_star == None:
         return (-1, -1)
 
+    # s[r_star] + (q - r_star)
     return tuple(s[r_star[0] * Bp_w + r_star[1]] + (np.array([row, col]) - r_star))
 
 
 def compute_distance(AAp_p, BBp_q, weights):
     assert(AAp_p.shape == BBp_q.shape == weights.shape)
-    # assert(np.allclose(norm((AAp_p - BBp_q) * weights, ord=2),
-    #                    np.sum(np.abs(((AAp_p - BBp_q)*weights)**2)), atol=0.05))
     return norm((AAp_p - BBp_q) * weights, ord=2)**2
-    #return np.sum(np.abs(((AAp_p - BBp_q)*weights)**2))
+
