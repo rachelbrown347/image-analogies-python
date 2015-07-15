@@ -3,14 +3,17 @@ import numpy as np
 
 
 # Set Parameters and Variables
-init_rand = True # initialize Bp as random
-convert = True  # Convert to YIQ
-k       = 25    # 0.5 <= k <= 5 for texture synthesis
-n_sm    = 3     # coarse scale neighborhood size
-n_lg    = 5     # fine scale neighborhood size
-n_half  = np.floor((n_lg * n_lg)/2.) # half feature for fine scale
-pad_sm  = np.floor(n_sm/2.)
-pad_lg  = np.floor(n_lg/2.)
+remap_lum = True  # remap luminance of A/Ap to B
+convert   = True  # Convert to YIQ
+init_rand = True  # initialize Bp as random
+
+k      = 25  # 0.5 <= k <= 5 for texture synthesis
+n_sm   = 3   # coarse scale neighborhood size
+n_lg   = 5   # fine scale neighborhood size
+
+n_half = np.floor((n_lg * n_lg)/2.)  # fine scale half neighborhood size
+pad_sm = np.floor(n_sm/2.)
+pad_lg = np.floor(n_lg/2.)
 
 num_ch = None
 padding_sm = None
@@ -38,6 +41,7 @@ def matlab_style_gauss2D(shape=(3,3),sigma=0.5):
     """
     2D gaussian mask - should give the same result as MATLAB's
     fspecial('gaussian',[shape],[sigma])
+    Courtesy of: http://stackoverflow.com/questions/17190649/how-to-obtain-a-gaussian-filter-in-python
     """
     m, n = [(ss-1.)/2. for ss in shape]
     y, x = np.ogrid[-m:m+1,-n:n+1]

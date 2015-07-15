@@ -36,6 +36,7 @@ def remap_luminance(A, Ap, B):
 
     return A_remap, Ap_remap
 
+
 def compute_gaussian_pyramid(img, min_size):
     h, w = img.shape[0:2]
     curr_size = np.min([h, w])
@@ -70,28 +71,8 @@ def initialize_Bp(B_pyr, init_rand=True):
     return Bp_pyr
 
 
-# def SaveFigureAsImage(fileName,fig=None,**kwargs):
-#     ''' Save a Matplotlib figure as an image without borders or frames.
-#         Courtesy of: http://robotics.usc.edu/~ampereir/wordpress/?p=626
-#         Args:
-#             fileName (str): String that ends in .png etc.
-#
-#             fig (Matplotlib figure instance): figure you want to save as the image
-#         Keyword Args:
-#             orig_size (tuple): width, height of the original image used to maintain
-#             aspect ratio.
-#     '''
-#     fig_size = fig.get_size_inches()
-#     w,h = fig_size[0], fig_size[1]
-#     fig.patch.set_alpha(0)
-#     if kwargs.has_key('orig_size'): # Aspect ratio scaling if required
-#         w,h = kwargs['orig_size']
-#         w2,h2 = fig_size[0],fig_size[1]
-#         fig.set_size_inches([(w2/w)*w,(w2/w)*h])
-#         fig.set_dpi((w2/w)*fig.get_dpi())
-#     a=fig.gca()
-#     a.set_frame_on(False)
-#     a.set_xticks([]); a.set_yticks([])
-#     plt.axis('off')
-#     plt.xlim(0,h); plt.ylim(w,0)
-#     fig.savefig(fileName, transparent=True, bbox_inches='tight', pad_inches=0, interpolation='nearest')
+def savefig_noborder(fileName, fig):
+    plt.axis('off')
+    fig.axes.get_xaxis().set_visible(False)
+    fig.axes.get_yaxis().set_visible(False)
+    plt.savefig(fileName, bbox_inches='tight', pad_inches=0)

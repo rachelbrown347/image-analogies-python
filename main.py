@@ -4,8 +4,8 @@ import pickle
 import time
 import warnings
 
-from img_preprocess import convert_to_YIQ, convert_to_RGB, compute_gaussian_pyramid, initialize_Bp, remap_luminance
-from texture_analogies import pad_img_pair, pad_img, create_index, extract_pixel_feature, best_approximate_match, best_coherence_match, compute_distance
+from img_preprocess import convert_to_YIQ, convert_to_RGB, compute_gaussian_pyramid, initialize_Bp, remap_luminance, savefig_noborder
+from texture_analogies import pad_img_pair, create_index, extract_pixel_feature, best_approximate_match, best_coherence_match, compute_distance
 import config as c
 
 
@@ -14,7 +14,7 @@ if __name__ == '__main__':
     # argv = sys.argv
     #
     # if len(argv) != 5:
-    #     print "Usage: python", argv[0], "[imageA] [imageA'] [imageB] [output_file]"
+    #     print "Usage: python", argv[0], "[imageA] [imageA'] [imageB] [output_path]"
     #     exit()
 
     # Read image files
@@ -22,7 +22,7 @@ if __name__ == '__main__':
     # A_fname  = (argv[1])
     # Ap_fname = (argv[2])
     # B_fname  = (argv[3])
-    # Bp_fname = argv[4]
+    # out_path = argv[4]
     #
     # A_orig = plt.imread(A_fname)
     # Ap_orig = plt.imread(Ap_fname)
@@ -32,17 +32,7 @@ if __name__ == '__main__':
     A_orig = plt.imread('./images/lf_originals/half_size/fruit-src.jpg')
     Ap_orig = plt.imread('./images/lf_originals/half_size/fruit-filt.jpg')
     B_orig = plt.imread('./images/lf_originals/half_size/boat-src.jpg')
-    out_path = './images/lf_originals/output/boat/working_test_1/'
-
-    # A_orig = plt.imread('./images/crosshatch/crosshatch_blurred.jpg')
-    # Ap_orig = plt.imread('./images/crosshatch/crosshatch.jpg')
-    # B_orig = plt.imread('./images/crosshatch/piano_gradient.jpg')
-    # out_path = './images/crosshatch/output/no_coh/'
-
-    # A_orig = plt.imread('./../sample-images/analogies/wood_orig_sm.jpg')
-    # Ap_orig = plt.imread('./../sample-images/analogies/real_wood_orig_sm.jpg')
-    # B_orig = plt.imread('./../sample-images/analogies/wood_relit_sm_2p5_2.jpg')
-    # Bp_fname = './../sample-images/analogies/output/real_wood_relit_sm_2p5_2_k25.jpg'
+    out_path = './images/lf_originals/output/boat/working_test_2/'
 
     assert(A_orig.shape == Ap_orig.shape)
     assert(len(A_orig.shape) == len(B_orig.shape)) # same number of channels
@@ -215,10 +205,8 @@ if __name__ == '__main__':
         # Save debugging structures
 
         for path, var in zip(paths, vars):
-            plt.figure()
-            plt.imshow(var, interpolation='nearest', cmap='gray')
-            plt.axis('off')
-            plt.savefig(out_path + path, bbox_inches='tight', pad_inches=0) #
+            fig = plt.imshow(var, interpolation='nearest', cmap='gray')
+            savefig_noborder(out_path + path, fig)
             plt.close()
 
         im_out = convert_to_RGB(np.dstack([Bp_pyr[level], B_color_pyr[level][:, :, 1:]]))
