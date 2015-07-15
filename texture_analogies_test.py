@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from img_preprocess import convert_to_YIQ, compute_gaussian_pyramid
-from texture_analogies import pad_img_pair, compute_feature_array, extract_pixel_feature, best_coherence_match
+from texture_analogies import pad_img_pair, compute_feature_array, extract_pixel_feature, best_coherence_match, best_coherence_match_orig, create_index
 
 import config as c
 
@@ -127,9 +127,12 @@ def test_best_coherence_match():
     imh, imw = A.shape[:2]
 
     c.num_ch, c.padding_sm, c.padding_lg, c.weights = c.setup_vars(A)
+    c.max_levels = len(A_pyr)
 
     A_pd  = pad_img_pair( A_pyr[-2],  A_pyr[-1], c)
     Ap_pd = pad_img_pair(Ap_pyr[-2], Ap_pyr[-1], c)
+
+    flann, flann_params, As, As_size = create_index(A_pyr, Ap_pyr, c)
 
     # BBp_feat cases: all corners and middle
     indices = [(1, 1),
@@ -148,14 +151,16 @@ def test_best_coherence_match():
         Bs_feat = np.hstack([extract_pixel_feature( A_pd, (row, col), c, full_feat=True),
                              extract_pixel_feature(Ap_pd, (row, col), c, full_feat=False)])
 
-        p_coh, r_star = best_coherence_match(A_pd, Ap_pd, Bs_feat, s, (row, col, imw), c)
+        p_coh_orig, r_star_orig = best_coherence_match_orig(A_pd, Ap_pd, Bs_feat, s, (row, col, imw), c)
+        p_coh_new, r_star_new = best_coherence_match(As[-1], A.shape, Bs_feat, s, (row, col, imw), c)
 
         try:
-            assert(p_coh == (row, col))
+            assert(p_coh_orig == (row, col))
+            assert(p_coh_new == (row, col))
         except:
-            print('row, col, p_coh, s', row, col, p_coh, s)
-            As_feat = np.hstack([extract_pixel_feature( A_pd, p_coh, c, full_feat=True),
-                                 extract_pixel_feature(Ap_pd, p_coh, c, full_feat=False)])
+            print('row, col, p_coh_orig, p_coh_new, s', row, col, p_coh_orig, p_coh_new, s)
+            As_feat = np.hstack([extract_pixel_feature( A_pd, p_coh_orig, p_coh_new, c, full_feat=True),
+                                 extract_pixel_feature(Ap_pd, p_coh_orig, p_coh_new, c, full_feat=False)])
             print('As_feat', As_feat)
             print('Bs_feat', Bs_feat)
             assert(False)

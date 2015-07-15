@@ -1,7 +1,10 @@
+from itertools import product
 import pyflann as pf
 import numpy as np
 from numpy.linalg import norm
 from sklearn.feature_extraction.image import extract_patches_2d
+
+from img_preprocess import px2ix
 
 
 def pad_img_pair(img_sm, img_lg, c):
@@ -54,13 +57,14 @@ def create_index(A_pyr, Ap_pyr, c):
 
     flann = [pf.FLANN() for _ in xrange(c.max_levels)]
     flann_params = [list([]) for _ in xrange(c.max_levels)]
+    As = [list([]) for _ in xrange(c.max_levels)]
     As_size = [list([]) for _ in xrange(c.max_levels)]
     for level in range(1, c.max_levels):
         print('Building index for level %d out of %d' % (level, c.max_levels - 1))
-        As = np.hstack([A_feat[level], Ap_feat[level]])
-        As_size[level] = As.shape
-        flann_params[level] = flann[level].build_index(As, algorithm='kmeans')
-    return flann, flann_params, As_size
+        As[level] = np.hstack([A_feat[level], Ap_feat[level]])
+        As_size[level] = As[level].shape
+        flann_params[level] = flann[level].build_index(As[level], algorithm='kmeans')
+    return flann, flann_params, As, As_size
 
 
 def best_approximate_match(flann, params, BBp_feat):
@@ -82,7 +86,7 @@ def extract_pixel_feature((im_sm_padded, im_lg_padded), (row, col), c, full_feat
         return px_feat[:c.num_ch * ((c.n_sm * c.n_sm) + c.n_half)]
 
 
-def best_coherence_match(A_pd, Ap_pd, BBp_feat, s, (row, col, Bp_w), c):
+def best_coherence_match_orig(A_pd, Ap_pd, BBp_feat, s, (row, col, Bp_w), c):
     assert(len(s) >= 1)
 
     # Handle edge cases
@@ -120,6 +124,38 @@ def best_coherence_match(A_pd, Ap_pd, BBp_feat, s, (row, col, Bp_w), c):
 
     # s[r_star] + (q - r_star)
     return tuple(s[r_star[0] * Bp_w + r_star[1]] + (np.array([row, col]) - r_star)), tuple(r_star)
+
+
+def best_coherence_match(As, A_shape, BBp_feat, s, (row, col, Bp_w), c):
+    assert(len(s) >= 1)
+
+    A_h, A_w = A_shape[:2]
+
+    # construct iterables
+    rs = []
+    prs = []
+    rows = np.arange(np.max([0, row - c.pad_lg]), row + 1, dtype=int)
+    cols = np.arange(np.max([0, col - c.pad_lg]), np.min([Bp_w, col + c.pad_lg + 1]), dtype=int)
+
+    for r_coord in product(rows, cols):
+        # discard anything after current pixel
+        if px2ix(r_coord, Bp_w) < px2ix((row, col), Bp_w):
+            # p_r = s(r) + (q - r)
+            pr = s[px2ix(r_coord, Bp_w)] + np.array([row, col]) - r_coord
+
+            # discard anything outside the bounds of A/Ap lg
+            if 0 <= pr[0] < A_h and 0 <= pr[1] < A_w:
+                rs.append(r_coord)
+                prs.append(px2ix(pr, A_w))
+
+    if not rs:
+        # no good coherence match
+        return (-1, -1), (0, 0)
+
+    rix = np.argmin(norm(As[np.array(prs)] - BBp_feat, ord=2, axis=1))
+    r_star = rs[rix]
+    # s[r_star] + (q - r-star)
+    return tuple(s[px2ix(r_star, Bp_w)] + np.array([row, col]) - r_star), r_star
 
 
 def compute_distance(AAp_p, BBp_q, weights):

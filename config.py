@@ -3,8 +3,8 @@ import numpy as np
 
 
 # Set Parameters and Variables
-remap_lum = False  # remap luminance of A/Ap to B
-convert   = False  # Convert to YIQ (also use color from B if true or Ap if false)
+convert   = True  # Convert to YIQ (also use color from B if true or Ap if false)
+remap_lum = True  # remap luminance of A/Ap to B
 init_rand = True  # initialize Bp as random
 
 if remap_lum: assert convert

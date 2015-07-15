@@ -72,7 +72,7 @@ def initialize_Bp(B_pyr, init_rand=True):
 
 
 def px2ix((row, col), w):
-    return row * w + col
+    return int(row * w + col)
 
 
 def ix2px(ix, w):

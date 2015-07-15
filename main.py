@@ -58,7 +58,6 @@ def img_setup(A_fname, Ap_fname, B_fname):
     return A_pyr, Ap_pyr, B_pyr, Bp_pyr, color_pyr, c
 
 
-
 if __name__ == '__main__':
 
     # argv = sys.argv
@@ -75,8 +74,8 @@ if __name__ == '__main__':
     # out_path = argv[4]
 
     # Files for testing
-    A_fname  = './images/lf_originals/half_size/boat-src.jpg'
-    Ap_fname = './images/lf_originals/half_size/boat-filt-fruit.jpg'
+    A_fname  = './images/lf_originals/half_size/fruit-src.jpg'
+    Ap_fname = './images/lf_originals/half_size/fruit-filt.jpg'
     B_fname  = './images/lf_originals/half_size/boat-src.jpg'
     out_path = './images/lf_originals/output/boat/working_test_3/'
 
@@ -92,7 +91,7 @@ if __name__ == '__main__':
     # Build Structures for ANN
     start_time = time.time()
 
-    flann, flann_params, As_size = create_index(A_pyr, Ap_pyr, c)
+    flann, flann_params, As, As_size = create_index(A_pyr, Ap_pyr, c)
 
     stop_time = time.time()
     ann_time_total = stop_time - start_time
@@ -166,7 +165,7 @@ if __name__ == '__main__':
 
                 # Find Coherence Match and Compare Distances
                 else:
-                    p_coh, r_star = best_coherence_match(A_pd, Ap_pd, BBp_feat, s, (row, col, imw), c)
+                    p_coh, r_star = best_coherence_match(As[level], A_pyr[level].shape, BBp_feat, s, (row, col, imw), c)
                     rstars.append(r_star)
 
                     if p_coh == (-1, -1):
