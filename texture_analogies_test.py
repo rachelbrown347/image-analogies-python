@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from img_preprocess import convert_to_YIQ, compute_gaussian_pyramid
-from texture_analogies import pad_img, compute_feature_array, extract_pixel_feature, best_coherence_match
+from texture_analogies import pad_img_pair, compute_feature_array, extract_pixel_feature, best_coherence_match
 
 import config as c
 
@@ -98,7 +98,7 @@ def test_extract_pixel_feature():
                      [0.3, 0.3, 0.3, 0.3, 0.3],
                      [0.3, 0.3, 0.3, 0.3, 0.3]])
 
-    im_padded = pad_img(sm, lg, c)
+    im_padded = pad_img_pair(sm, lg, c)
 
     # First test full feature
 
@@ -128,8 +128,8 @@ def test_best_coherence_match():
 
     c.num_ch, c.padding_sm, c.padding_lg, c.weights = c.setup_vars(A)
 
-    A_pd  = pad_img( A_pyr[-2],  A_pyr[-1], c)
-    Ap_pd = pad_img(Ap_pyr[-2], Ap_pyr[-1], c)
+    A_pd  = pad_img_pair( A_pyr[-2],  A_pyr[-1], c)
+    Ap_pd = pad_img_pair(Ap_pyr[-2], Ap_pyr[-1], c)
 
     # BBp_feat cases: all corners and middle
     indices = [(1, 1),

@@ -4,9 +4,30 @@ from numpy.linalg import norm
 from sklearn.feature_extraction.image import extract_patches_2d
 
 
-def pad_img(img_sm, img_lg, c):
-    return [np.pad(img_sm, c.padding_sm, mode='symmetric'),
-            np.pad(img_lg, c.padding_lg, mode='symmetric')]
+def pad_img_pair(img_sm, img_lg, c, noise=False):
+    if noise:
+        assert(len(img_sm.shape) == 2)
+        pd_shape_sm = img_sm.shape[:2] + 2 * c.pad_sm
+        pd_shape_lg = img_lg.shape[:2] + 2 * c.pad_lg
+        pd_sm = np.random.rand(np.product(pd_shape_sm)).reshape(pd_shape_sm)
+        pd_lg = np.random.rand(np.product(pd_shape_lg)).reshape(pd_shape_lg)
+        pd_sm[c.pad_sm:-c.pad_sm, c.pad_sm:-c.pad_sm] = img_sm
+        pd_lg[c.pad_lg:-c.pad_lg, c.pad_lg:-c.pad_lg] = img_lg
+        return [pd_sm, pd_lg]
+    else:
+        return [np.pad(img_sm, c.padding_sm, mode='symmetric'),
+                np.pad(img_lg, c.padding_lg, mode='symmetric')]
+
+
+def pad_img(img, padding, noise=False):
+    if noise:
+        assert(len(img.shape) == 2)
+        pd_shape = img.shape[:2] + 2 * padding
+        pd_img = np.random.rand(np.product(pd_shape)).reshape(pd_shape)
+        pd_img[padding:-padding, padding:-padding] = img
+        return pd_img
+    else:
+        return np.pad(img, padding, mode='symmetric')
 
 
 def compute_feature_array(im_pyr, c, full_feat):
@@ -19,7 +40,7 @@ def compute_feature_array(im_pyr, c, full_feat):
 
     # pad each pyramid level to avoid edge problems
     for level in range(1, len(im_pyr)):
-        padded_sm, padded_lg = pad_img(im_pyr[level - 1], im_pyr[level], c)
+        padded_sm, padded_lg = pad_img_pair(im_pyr[level - 1], im_pyr[level], c)
 
         patches_sm = extract_patches_2d(padded_sm, (c.n_sm, c.n_sm))
         patches_lg = extract_patches_2d(padded_lg, (c.n_lg, c.n_lg))
@@ -91,10 +112,10 @@ def best_coherence_match(A_pd, Ap_pd, BBp_feat, s, (row, col, Bp_w), c):
     assert(len(s) >= 1)
 
     # Handle edge cases
-    row_min = np.min([0, row - c.pad_lg])
+    row_min = np.max([0, row - c.pad_lg])
     row_max = row + 1
-    col_min = np.min([0, col - c.pad_lg])
-    col_max = np.max([Bp_w, col + c.pad_lg + 1])
+    col_min = np.max([0, col - c.pad_lg])
+    col_max = np.min([Bp_w, col + c.pad_lg + 1])
 
     min_sum = float('inf')
     r_star = None
@@ -121,10 +142,10 @@ def best_coherence_match(A_pd, Ap_pd, BBp_feat, s, (row, col, Bp_w), c):
                     min_sum = new_sum
                     r_star = np.array([r_row, r_col])
     if r_star == None:
-        return (-1, -1)
+        return (-1, -1), (0, 0)
 
     # s[r_star] + (q - r_star)
-    return tuple(s[r_star[0] * Bp_w + r_star[1]] + (np.array([row, col]) - r_star))
+    return tuple(s[r_star[0] * Bp_w + r_star[1]] + (np.array([row, col]) - r_star)), tuple(r_star)
 
 
 def compute_distance(AAp_p, BBp_q, weights):

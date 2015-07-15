@@ -3,8 +3,9 @@ import numpy as np
 
 
 # Set Parameters and Variables
+init_rand = True # initialize Bp as random
 convert = True  # Convert to YIQ
-k       = 25     # 0.5 <= k <= 5 for texture synthesis
+k       = 25    # 0.5 <= k <= 5 for texture synthesis
 n_sm    = 3     # coarse scale neighborhood size
 n_lg    = 5     # fine scale neighborhood size
 n_half  = np.floor((n_lg * n_lg)/2.) # half feature for fine scale

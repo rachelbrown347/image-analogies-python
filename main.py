@@ -5,7 +5,7 @@ import time
 import warnings
 
 from img_preprocess import convert_to_YIQ, convert_to_RGB, compute_gaussian_pyramid, initialize_Bp, remap_luminance
-from texture_analogies import pad_img, create_index, extract_pixel_feature, best_approximate_match, best_coherence_match, compute_distance
+from texture_analogies import pad_img_pair, pad_img, create_index, extract_pixel_feature, best_approximate_match, best_coherence_match, compute_distance
 import config as c
 
 
@@ -32,7 +32,7 @@ if __name__ == '__main__':
     A_orig = plt.imread('./images/lf_originals/half_size/fruit-src.jpg')
     Ap_orig = plt.imread('./images/lf_originals/half_size/fruit-filt.jpg')
     B_orig = plt.imread('./images/lf_originals/half_size/boat-src.jpg')
-    out_path = './images/lf_originals/output/boat/full_alg_kmeans_2_test/'
+    out_path = './images/lf_originals/output/boat/full_alg_kmeans_kappa25/'
 
     # A_orig = plt.imread('./images/crosshatch/crosshatch_blurred.jpg')
     # Ap_orig = plt.imread('./images/crosshatch/crosshatch.jpg')
@@ -87,7 +87,7 @@ if __name__ == '__main__':
 
     # Create Random Initialization of Bp
 
-    Bp_pyr = initialize_Bp(B_pyr, init_rand=True)
+    Bp_pyr = initialize_Bp(B_pyr, init_rand=c.init_rand)
 
     stop_time = time.time()
     print 'Environment Setup: %f' % (stop_time - start_time)
@@ -113,13 +113,24 @@ if __name__ == '__main__':
         imh, imw = Bp_pyr[level].shape[0:2]
 
         # pad each pyramid level to avoid edge problems
-        A_pd  = pad_img( A_pyr[level - 1],  A_pyr[level], c)
-        Ap_pd = pad_img(Ap_pyr[level - 1], Ap_pyr[level], c)
-        B_pd  = pad_img( B_pyr[level - 1],  B_pyr[level], c)
+        A_pd  = pad_img_pair( A_pyr[level - 1],  A_pyr[level], c)
+        Ap_pd = pad_img_pair(Ap_pyr[level - 1], Ap_pyr[level], c)
+        B_pd  = pad_img_pair( B_pyr[level - 1],  B_pyr[level], c)
+
+
+        if c.init_rand:
+            assert(len(Bp_pyr[level].shape) == 2)
+            Bp_sm_pd = pad_img(Bp_pyr[level - 1], c.padding_sm)
+            lg_shape = Bp_pyr[level    ].shape + 2 * c.pad_lg
+            Bp_lg_pd = np.random.rand(np.product(lg_shape)).reshape(lg_shape)
+            Bp_pd = [Bp_sm_pd, Bp_lg_pd]
+        else:
+            Bp_pd = pad_img_pair(Bp_pyr[level - 1], Bp_pyr[level], c)
 
         s = []
         s_a = []
         s_c = []
+        s_r = []
 
         # debugging structures
         p_src    = np.nan * np.ones((imh, imw, 3))
@@ -134,10 +145,6 @@ if __name__ == '__main__':
 
         for row in range(imh):
             for col in range(imw):
-                # pad each pyramid level to avoid edge problems
-                # could be done outside the loop with tricks
-                Bp_pd = pad_img(Bp_pyr[level - 1], Bp_pyr[level], c)
-
                 B_feat  = extract_pixel_feature( B_pd, (row, col), c, full_feat=True)
                 Bp_feat = extract_pixel_feature(Bp_pd, (row, col), c, full_feat=False)
 
@@ -167,16 +174,17 @@ if __name__ == '__main__':
                 #if True:
                     p = p_app
                     s_c.append(p_app)
+                    s_r.append((0, 0))
                     p_src[row, col] = np.array([1, 0, 0])
 
                 # Find Coherence Match and Compare Distances
 
                 else:
-                    p_coh = best_coherence_match(A_pd, Ap_pd, BBp_feat, s, (row, col, imw), c)
+                    p_coh, r_star = best_coherence_match(A_pd, Ap_pd, BBp_feat, s, (row, col, imw), c)
+                    s_r.append(r_star)
 
                     if p_coh == (-1, -1):
                         s_c.append(p_app)
-
                         p = p_app
                         p_src[row, col] = np.array([0, 0, 0])
 
@@ -207,7 +215,7 @@ if __name__ == '__main__':
                 p_val = Ap_pyr[level][p]
 
                 # Set Bp and Update s
-
+                Bp_lg_pd[row + c.pad_lg, col + c.pad_lg] = p_val
                 Bp_pyr[level][row, col] = p_val
 
                 s.append(p)
@@ -228,7 +236,7 @@ if __name__ == '__main__':
         plt.imsave(out_path + 'im_out_color_%d.jpg' % level, im_out)
 
         with open(out_path + '%d_srcs.pickle' % level, 'w') as f:
-            pickle.dump([s_a, s_c, s], f)
+            pickle.dump([s_a, s_c, s_r, s], f)
 
         stop_time = time.time()
         print 'Level %d time: %f' % (level, stop_time - start_time)
