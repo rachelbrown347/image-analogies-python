@@ -9,6 +9,56 @@ from texture_analogies import pad_img_pair, create_index, extract_pixel_feature,
 import config as c
 
 
+def img_setup(A_fname, Ap_fname, B_fname):
+    A_orig  = plt.imread(A_fname)
+    Ap_orig = plt.imread(Ap_fname)
+    B_orig  = plt.imread(B_fname)
+
+    assert(A_orig.shape == Ap_orig.shape)  # src alignment
+    assert(len(A_orig.shape) == len(B_orig.shape))  # same number of channels (for now)
+
+    # Do conversions
+    if c.convert:
+        A_yiq  = convert_to_YIQ( A_orig/255.)
+        Ap_yiq = convert_to_YIQ(Ap_orig/255.)
+        B_yiq  = convert_to_YIQ( B_orig/255.)
+        A  =  A_yiq[:, :, 0]
+        Ap = Ap_yiq[:, :, 0]
+        B  =  B_yiq[:, :, 0]
+    else:
+        A  =  A_orig/255.
+        Ap = Ap_orig/255.
+        B  =  B_orig/255.
+
+    # Remap Luminance
+    if c.remap_lum:
+        A, Ap = remap_luminance(A, Ap, B)
+
+    c.num_ch, c.padding_sm, c.padding_lg, c.weights = c.setup_vars(A)
+
+    # Create Pyramids
+    A_pyr  = compute_gaussian_pyramid( A, c.n_sm)
+    Ap_pyr = compute_gaussian_pyramid(Ap, c.n_sm)
+    B_pyr  = compute_gaussian_pyramid( B, c.n_sm)
+
+    if c.color_B:
+        color_pyr = compute_gaussian_pyramid(B_yiq, c.n_sm)
+    else:
+        color_pyr = compute_gaussian_pyramid(Ap_orig, c.n_sm)
+
+    if len(A_pyr) != len(B_pyr):
+        c.max_levels = min(len(A_pyr), len(B_pyr))
+        warnings.warn('Warning: input images are very different sizes! The minimum number of levels will be used.')
+    else:
+        c.max_levels = len(B_pyr)
+
+    # Create Random Initialization of Bp
+    Bp_pyr = initialize_Bp(B_pyr, init_rand=c.init_rand)
+
+    return A_pyr, Ap_pyr, B_pyr, Bp_pyr, color_pyr, c
+
+
+
 if __name__ == '__main__':
 
     # argv = sys.argv
@@ -23,61 +73,19 @@ if __name__ == '__main__':
     # Ap_fname = (argv[2])
     # B_fname  = (argv[3])
     # out_path = argv[4]
-    #
-    # A_orig = plt.imread(A_fname)
-    # Ap_orig = plt.imread(Ap_fname)
-    # B_orig = plt.imread(B_fname)
 
-    # Files for Testing
-    A_orig = plt.imread('./images/lf_originals/half_size/fruit-src.jpg')
-    Ap_orig = plt.imread('./images/lf_originals/half_size/fruit-filt.jpg')
-    B_orig = plt.imread('./images/lf_originals/half_size/boat-src.jpg')
+    # Files for testing
+    A_fname  = './images/lf_originals/half_size/fruit-src.jpg'
+    Ap_fname = './images/lf_originals/half_size/fruit-filt.jpg'
+    B_fname  = './images/lf_originals/half_size/boat-src.jpg'
     out_path = './images/lf_originals/output/boat/working_test_2/'
-
-    assert(A_orig.shape == Ap_orig.shape)
-    assert(len(A_orig.shape) == len(B_orig.shape)) # same number of channels
 
     # This is all the setup code
 
     begin_time = time.time()
     start_time = time.time()
 
-    # Do conversions
-
-    if c.convert:
-        A_yiq  = convert_to_YIQ( A_orig/255.)
-        Ap_yiq = convert_to_YIQ(Ap_orig/255.)
-        B_yiq  = convert_to_YIQ( B_orig/255.)
-        A  =  A_yiq[:, :, 0]
-        Ap = Ap_yiq[:, :, 0]
-        B  =  B_yiq[:, :, 0]
-    else:
-        A  =  A_orig/255.
-        Ap = Ap_orig/255.
-        B  =  B_orig/255.
-
-    c.num_ch, c.padding_sm, c.padding_lg, c.weights = c.setup_vars(A)
-
-    # Remap Luminance
-
-    A, Ap = remap_luminance(A, Ap, B)
-
-    # Create Pyramids
-
-    A_pyr  = compute_gaussian_pyramid( A, c.n_sm)
-    Ap_pyr = compute_gaussian_pyramid(Ap, c.n_sm)
-    B_pyr  = compute_gaussian_pyramid( B, c.n_sm)
-    B_color_pyr = compute_gaussian_pyramid(B_yiq, c.n_sm)
-
-    if len(A_pyr) != len(B_pyr):
-        max_levels = min(len(A_pyr), len(B_pyr))
-        warnings.warn('Warning: input images are very different sizes! The minimum number of levels will be used.')
-    else:
-        max_levels = len(B_pyr)
-
-    # Create Random Initialization of Bp
-
-    Bp_pyr = initialize_Bp(B_pyr, init_rand=c.init_rand)
+    A_pyr, Ap_pyr, B_pyr, Bp_pyr, color_pyr, c = img_setup(A_fname, Ap_fname, B_fname)
 
     stop_time = time.time()
     print 'Environment Setup: %f' % (stop_time - start_time)
@@ -95,10 +103,10 @@ if __name__ == '__main__':
     # # This is the Algorithm Code
 
     # now we iterate per pixel in each level
-    for level in range(1, max_levels):
+    for level in range(1, c.max_levels):
         start_time = time.time()
         ann_time_level = 0
-        print('Computing level %d of %d' % (level, max_levels - 1))
+        print('Computing level %d of %d' % (level, c.max_levels - 1))
 
         imh, imw = Bp_pyr[level].shape[0:2]
 
@@ -186,7 +194,7 @@ if __name__ == '__main__':
                         app_dist[row, col] = d_app
                         coh_dist[row, col] = d_coh
 
-                        if d_coh <= d_app * (1 + (2**(level - max_levels - 1)) * c.k):
+                        if d_coh <= d_app * (1 + (2**(level - c.max_levels - 1)) * c.k):
                             p = p_coh
                             p_src[row, col] = np.array([1, 1, 0])
                         else:
@@ -209,7 +217,7 @@ if __name__ == '__main__':
             savefig_noborder(out_path + path, fig)
             plt.close()
 
-        im_out = convert_to_RGB(np.dstack([Bp_pyr[level], B_color_pyr[level][:, :, 1:]]))
+        im_out = convert_to_RGB(np.dstack([Bp_pyr[level], color_pyr[level][:, :, 1:]]))
         im_out = np.clip(im_out, 0, 1)
         plt.imsave(out_path + 'im_out_color_%d.jpg' % level, im_out)
 

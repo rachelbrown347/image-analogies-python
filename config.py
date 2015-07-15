@@ -6,6 +6,7 @@ import numpy as np
 remap_lum = True  # remap luminance of A/Ap to B
 convert   = True  # Convert to YIQ
 init_rand = True  # initialize Bp as random
+color_B   = True  # use color from B if true (or Ap if false)
 
 k      = 25  # 0.5 <= k <= 5 for texture synthesis
 n_sm   = 3   # coarse scale neighborhood size
@@ -16,6 +17,7 @@ pad_sm = np.floor(n_sm/2.)
 pad_lg = np.floor(n_lg/2.)
 
 num_ch = None
+max_levels = None
 padding_sm = None
 padding_lg = None
 weights = None
