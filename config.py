@@ -3,10 +3,11 @@ import numpy as np
 
 
 # Set Parameters and Variables
-remap_lum = True  # remap luminance of A/Ap to B
-convert   = True  # Convert to YIQ
+remap_lum = False  # remap luminance of A/Ap to B
+convert   = False  # Convert to YIQ (also use color from B if true or Ap if false)
 init_rand = True  # initialize Bp as random
-color_B   = True  # use color from B if true (or Ap if false)
+
+if remap_lum: assert convert
 
 k      = 25  # 0.5 <= k <= 5 for texture synthesis
 n_sm   = 3   # coarse scale neighborhood size

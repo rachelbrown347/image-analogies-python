@@ -71,6 +71,16 @@ def initialize_Bp(B_pyr, init_rand=True):
     return Bp_pyr
 
 
+def px2ix((row, col), w):
+    return row * w + col
+
+
+def ix2px(ix, w):
+    col = ix % w
+    row = (ix - col) // w
+    return (row, col)
+
+
 def savefig_noborder(fileName, fig):
     plt.axis('off')
     fig.axes.get_xaxis().set_visible(False)

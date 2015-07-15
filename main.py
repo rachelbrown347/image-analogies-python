@@ -4,7 +4,7 @@ import pickle
 import time
 import warnings
 
-from img_preprocess import convert_to_YIQ, convert_to_RGB, compute_gaussian_pyramid, initialize_Bp, remap_luminance, savefig_noborder
+from img_preprocess import convert_to_YIQ, convert_to_RGB, compute_gaussian_pyramid, initialize_Bp, remap_luminance, ix2px, savefig_noborder
 from texture_analogies import pad_img_pair, create_index, extract_pixel_feature, best_approximate_match, best_coherence_match, compute_distance
 import config as c
 
@@ -41,7 +41,7 @@ def img_setup(A_fname, Ap_fname, B_fname):
     Ap_pyr = compute_gaussian_pyramid(Ap, c.n_sm)
     B_pyr  = compute_gaussian_pyramid( B, c.n_sm)
 
-    if c.color_B:
+    if c.convert:
         color_pyr = compute_gaussian_pyramid(B_yiq, c.n_sm)
     else:
         color_pyr = compute_gaussian_pyramid(Ap_orig, c.n_sm)
@@ -75,13 +75,12 @@ if __name__ == '__main__':
     # out_path = argv[4]
 
     # Files for testing
-    A_fname  = './images/lf_originals/half_size/fruit-src.jpg'
-    Ap_fname = './images/lf_originals/half_size/fruit-filt.jpg'
+    A_fname  = './images/lf_originals/half_size/boat-src.jpg'
+    Ap_fname = './images/lf_originals/half_size/boat-filt-fruit.jpg'
     B_fname  = './images/lf_originals/half_size/boat-src.jpg'
-    out_path = './images/lf_originals/output/boat/working_test_2/'
+    out_path = './images/lf_originals/output/boat/working_test_3/'
 
     # This is all the setup code
-
     begin_time = time.time()
     start_time = time.time()
 
@@ -91,7 +90,6 @@ if __name__ == '__main__':
     print 'Environment Setup: %f' % (stop_time - start_time)
 
     # Build Structures for ANN
-
     start_time = time.time()
 
     flann, flann_params, As_size = create_index(A_pyr, Ap_pyr, c)
@@ -108,7 +106,8 @@ if __name__ == '__main__':
         ann_time_level = 0
         print('Computing level %d of %d' % (level, c.max_levels - 1))
 
-        imh, imw = Bp_pyr[level].shape[0:2]
+        imh, imw = Bp_pyr[level].shape[:2]
+        color_im_out = np.nan * np.ones((imh, imw, 3))
 
         # pad each pyramid level to avoid edge problems
         A_pd  = pad_img_pair( A_pyr[level - 1],  A_pyr[level], c)
@@ -116,14 +115,18 @@ if __name__ == '__main__':
         B_pd  = pad_img_pair( B_pyr[level - 1],  B_pyr[level], c)
 
         s = []
-        s_a = []
-        s_c = []
-        s_r = []
 
         # debugging structures
-        p_src    = np.nan * np.ones((imh, imw, 3))
-        coh_dist = np.zeros((imh, imw))
-        app_dist = np.zeros((imh, imw))
+        sa = []
+        sc = []
+        rstars = []
+        p_src     = np.nan * np.ones((imh, imw, 3))
+        app_dist  = np.zeros((imh, imw))
+        coh_dist  = np.zeros((imh, imw))
+        app_color = np.array([1, 0, 0])
+        coh_color = np.array([1, 1, 0])
+        err_color = np.array([0, 0, 0])
+
 
         paths = ['%d_psrc.eps'    % (level),
                  '%d_appdist.eps' % (level),
@@ -134,14 +137,11 @@ if __name__ == '__main__':
         for row in range(imh):
             for col in range(imw):
                 Bp_pd = pad_img_pair(Bp_pyr[level - 1], Bp_pyr[level], c)
-
                 BBp_feat = np.hstack([extract_pixel_feature( B_pd, (row, col), c, full_feat=True),
                                       extract_pixel_feature(Bp_pd, (row, col), c, full_feat=False)])
-
                 assert(BBp_feat.shape == (As_size[level][1],))
 
                 # Find Approx Nearest Neighbor
-
                 ann_start_time = time.time()
 
                 p_app_ix = best_approximate_match(flann[level], flann_params[level], BBp_feat)
@@ -151,34 +151,31 @@ if __name__ == '__main__':
                 ann_time_level = ann_time_level + ann_stop_time - ann_start_time
 
                 # translate p_app_ix back to row, col
-                Ap_imh, Ap_imw = Ap_pyr[level].shape
-                p_app_col = p_app_ix % Ap_imw
-                p_app_row = (p_app_ix - p_app_col) // Ap_imw
-                p_app = (p_app_row, p_app_col)
-                s_a.append(p_app)
+                Ap_imh, Ap_imw = Ap_pyr[level].shape[:2]
+                p_app = ix2px(p_app_ix, Ap_imw)
+                sa.append(p_app)
 
                 # is this the first iteration for this level?
                 # then skip coherence step
                 if len(s) < 1:
-                #if True:
+                #if True: # ANN only method, used for debugging
                     p = p_app
-                    s_c.append(p_app)
-                    s_r.append((0, 0))
-                    p_src[row, col] = np.array([1, 0, 0])
+                    p_src[row, col] = app_color
+                    sc.append((0, 0))
+                    rstars.append((0, 0))
 
                 # Find Coherence Match and Compare Distances
-
                 else:
                     p_coh, r_star = best_coherence_match(A_pd, Ap_pd, BBp_feat, s, (row, col, imw), c)
-                    s_r.append(r_star)
+                    rstars.append(r_star)
 
                     if p_coh == (-1, -1):
-                        s_c.append(p_app)
                         p = p_app
-                        p_src[row, col] = np.array([0, 0, 0])
+                        p_src[row, col] = err_color
+                        sc.append((0, 0))
 
                     else:
-                        s_c.append(p_coh)
+                        sc.append(p_coh)
 
                         A_feat_app = extract_pixel_feature( A_pd, p_app, c, full_feat=True)
                         Ap_feat_app = extract_pixel_feature(Ap_pd, p_app, c, full_feat=False)
@@ -196,33 +193,35 @@ if __name__ == '__main__':
 
                         if d_coh <= d_app * (1 + (2**(level - c.max_levels - 1)) * c.k):
                             p = p_coh
-                            p_src[row, col] = np.array([1, 1, 0])
+                            p_src[row, col] = coh_color
                         else:
                             p = p_app
-                            p_src[row, col] = np.array([1, 0, 0])
+                            p_src[row, col] = app_color
 
-                p_val = Ap_pyr[level][p]
+                # Set Bp and update s
+                Bp_pyr[level][row, col] = Ap_pyr[level][p]
 
-                # Set Bp and Update s
-                Bp_pyr[level][row, col] = p_val
+                if not c.convert:
+                    color_im_out[row, col, :] = color_pyr[level][p]
 
                 s.append(p)
 
         ann_time_total = ann_time_total + ann_time_level
 
         # Save debugging structures
-
         for path, var in zip(paths, vars):
             fig = plt.imshow(var, interpolation='nearest', cmap='gray')
             savefig_noborder(out_path + path, fig)
             plt.close()
 
-        im_out = convert_to_RGB(np.dstack([Bp_pyr[level], color_pyr[level][:, :, 1:]]))
-        im_out = np.clip(im_out, 0, 1)
-        plt.imsave(out_path + 'im_out_color_%d.jpg' % level, im_out)
-
         with open(out_path + '%d_srcs.pickle' % level, 'w') as f:
-            pickle.dump([s_a, s_c, s_r, s], f)
+            pickle.dump([sa, sc, rstars, s], f)
+
+        # Save color output images
+        if c.convert:
+            color_im_out = convert_to_RGB(np.dstack([Bp_pyr[level], color_pyr[level][:, :, 1:]]))
+            color_im_out = np.clip(color_im_out, 0, 1)
+        plt.imsave(out_path + 'im_out_color_%d.jpg' % level, color_im_out)
 
         stop_time = time.time()
         print 'Level %d time: %f' % (level, stop_time - start_time)

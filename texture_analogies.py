@@ -9,10 +9,6 @@ def pad_img_pair(img_sm, img_lg, c):
         np.pad(img_lg, c.padding_lg, mode='symmetric')]
 
 
-def pad_img(img, padding):
-    return np.pad(img, padding, mode='symmetric')
-
-
 def compute_feature_array(im_pyr, c, full_feat):
     # features will be organized like this:
     # sm_imA, lg_imA (channels shuffled C-style)
@@ -76,7 +72,7 @@ def best_approximate_match(flann, params, BBp_feat):
 
 def extract_pixel_feature((im_sm_padded, im_lg_padded), (row, col), c, full_feat):
     # Single channel only
-    assert(len(im_sm_padded.shape) == 2)
+    #assert(len(im_sm_padded.shape) == 2)
 
     # first extract full feature vector
     # since the images are padded, we need to add the padding to our indexing
@@ -101,7 +97,7 @@ def best_coherence_match(A_pd, Ap_pd, BBp_feat, s, (row, col, Bp_w), c):
     col_max = np.min([Bp_w, col + c.pad_lg + 1])
 
     min_sum = float('inf')
-    r_star = None
+    r_star = (np.nan, np.nan)
     for r_row in np.arange(row_min, row_max, dtype=int):
         col_end = col if r_row == row else col_max
         for r_col in np.arange(col_min, col_end, dtype=int):
@@ -111,7 +107,7 @@ def best_coherence_match(A_pd, Ap_pd, BBp_feat, s, (row, col, Bp_w), c):
             p_r = np.array(s[s_ix]) + np.array([row, col]) - np.array([r_row, r_col])
 
             # check that p_r is inside the bounds of A/Ap lg
-            A_h, A_w = A_pd[1].shape - 2 * c.pad_lg
+            A_h, A_w = A_pd[1].shape[:2] - 2 * c.pad_lg
 
             if 0 <= p_r[0] < A_h and 0 <= p_r[1] < A_w:
                 AAp_feat = np.hstack([extract_pixel_feature( A_pd, p_r, c, full_feat=True),
@@ -124,7 +120,7 @@ def best_coherence_match(A_pd, Ap_pd, BBp_feat, s, (row, col, Bp_w), c):
                 if new_sum <= min_sum:
                     min_sum = new_sum
                     r_star = np.array([r_row, r_col])
-    if r_star == None:
+    if np.isnan(r_star).any():
         return (-1, -1), (0, 0)
 
     # s[r_star] + (q - r_star)
