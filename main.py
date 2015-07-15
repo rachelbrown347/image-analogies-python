@@ -177,13 +177,11 @@ if __name__ == '__main__':
                     else:
                         sc.append(p_coh)
 
-                        A_feat_app = extract_pixel_feature( A_pd, p_app, c, full_feat=True)
-                        Ap_feat_app = extract_pixel_feature(Ap_pd, p_app, c, full_feat=False)
-                        AAp_feat_app = np.hstack([A_feat_app, Ap_feat_app])
+                        AAp_feat_app = np.hstack([extract_pixel_feature( A_pd, p_app, c, full_feat=True),
+                                                  extract_pixel_feature(Ap_pd, p_app, c, full_feat=False)])
 
-                        A_feat_coh = extract_pixel_feature( A_pd, p_coh, c, full_feat=True)
-                        Ap_feat_coh = extract_pixel_feature(Ap_pd, p_coh, c, full_feat=False)
-                        AAp_feat_coh = np.hstack([A_feat_coh, Ap_feat_coh])
+                        AAp_feat_coh = np.hstack([extract_pixel_feature( A_pd, p_coh, c, full_feat=True),
+                                                  extract_pixel_feature(Ap_pd, p_coh, c, full_feat=False)])
 
                         d_app = compute_distance(AAp_feat_app, BBp_feat, c.weights)
                         d_coh = compute_distance(AAp_feat_coh, BBp_feat, c.weights)
@@ -191,7 +189,7 @@ if __name__ == '__main__':
                         app_dist[row, col] = d_app
                         coh_dist[row, col] = d_coh
 
-                        if d_coh <= d_app * (1 + (2**(level - c.max_levels - 1)) * c.k):
+                        if d_coh <= d_app * (1 + (2**(level - c.max_levels)) * c.k):
                             p = p_coh
                             p_src[row, col] = coh_color
                         else:

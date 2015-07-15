@@ -52,13 +52,11 @@ def create_index(A_pyr, Ap_pyr, c):
     A_feat  = compute_feature_array(A_pyr,  c, full_feat=True)
     Ap_feat = compute_feature_array(Ap_pyr, c, full_feat=False)
 
-    max_levels = len(A_pyr)
-
-    flann = [pf.FLANN() for _ in xrange(max_levels)]
-    flann_params = [list([]) for _ in xrange(max_levels)]
-    As_size = [list([]) for _ in xrange(max_levels)]
-    for level in range(1, max_levels):
-        print('Building index for level %d out of %d' % (level, max_levels - 1))
+    flann = [pf.FLANN() for _ in xrange(c.max_levels)]
+    flann_params = [list([]) for _ in xrange(c.max_levels)]
+    As_size = [list([]) for _ in xrange(c.max_levels)]
+    for level in range(1, c.max_levels):
+        print('Building index for level %d out of %d' % (level, c.max_levels - 1))
         As = np.hstack([A_feat[level], Ap_feat[level]])
         As_size[level] = As.shape
         flann_params[level] = flann[level].build_index(As, algorithm='kmeans')
@@ -71,9 +69,6 @@ def best_approximate_match(flann, params, BBp_feat):
 
 
 def extract_pixel_feature((im_sm_padded, im_lg_padded), (row, col), c, full_feat):
-    # Single channel only
-    #assert(len(im_sm_padded.shape) == 2)
-
     # first extract full feature vector
     # since the images are padded, we need to add the padding to our indexing
     px_feat = np.hstack([im_sm_padded[np.floor(row/2.) : np.floor(row/2.) + 2 * c.pad_sm + 1, \
