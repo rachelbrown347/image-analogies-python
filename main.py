@@ -32,7 +32,7 @@ if __name__ == '__main__':
     A_orig = plt.imread('./images/lf_originals/half_size/fruit-src.jpg')
     Ap_orig = plt.imread('./images/lf_originals/half_size/fruit-filt.jpg')
     B_orig = plt.imread('./images/lf_originals/half_size/boat-src.jpg')
-    out_path = './images/lf_originals/output/boat/full_alg_kmeans_kappa25/'
+    out_path = './images/lf_originals/output/boat/working_test_1/'
 
     # A_orig = plt.imread('./images/crosshatch/crosshatch_blurred.jpg')
     # Ap_orig = plt.imread('./images/crosshatch/crosshatch.jpg')
@@ -117,16 +117,6 @@ if __name__ == '__main__':
         Ap_pd = pad_img_pair(Ap_pyr[level - 1], Ap_pyr[level], c)
         B_pd  = pad_img_pair( B_pyr[level - 1],  B_pyr[level], c)
 
-
-        if c.init_rand:
-            assert(len(Bp_pyr[level].shape) == 2)
-            Bp_sm_pd = pad_img(Bp_pyr[level - 1], c.padding_sm)
-            lg_shape = Bp_pyr[level    ].shape + 2 * c.pad_lg
-            Bp_lg_pd = np.random.rand(np.product(lg_shape)).reshape(lg_shape)
-            Bp_pd = [Bp_sm_pd, Bp_lg_pd]
-        else:
-            Bp_pd = pad_img_pair(Bp_pyr[level - 1], Bp_pyr[level], c)
-
         s = []
         s_a = []
         s_c = []
@@ -145,10 +135,11 @@ if __name__ == '__main__':
 
         for row in range(imh):
             for col in range(imw):
-                B_feat  = extract_pixel_feature( B_pd, (row, col), c, full_feat=True)
-                Bp_feat = extract_pixel_feature(Bp_pd, (row, col), c, full_feat=False)
+                Bp_pd = pad_img_pair(Bp_pyr[level - 1], Bp_pyr[level], c)
 
-                BBp_feat = np.hstack([B_feat, Bp_feat])
+                BBp_feat = np.hstack([extract_pixel_feature( B_pd, (row, col), c, full_feat=True),
+                                      extract_pixel_feature(Bp_pd, (row, col), c, full_feat=False)])
+
                 assert(BBp_feat.shape == (As_size[level][1],))
 
                 # Find Approx Nearest Neighbor
@@ -215,7 +206,6 @@ if __name__ == '__main__':
                 p_val = Ap_pyr[level][p]
 
                 # Set Bp and Update s
-                Bp_lg_pd[row + c.pad_lg, col + c.pad_lg] = p_val
                 Bp_pyr[level][row, col] = p_val
 
                 s.append(p)

@@ -4,30 +4,13 @@ from numpy.linalg import norm
 from sklearn.feature_extraction.image import extract_patches_2d
 
 
-def pad_img_pair(img_sm, img_lg, c, noise=False):
-    if noise:
-        assert(len(img_sm.shape) == 2)
-        pd_shape_sm = img_sm.shape[:2] + 2 * c.pad_sm
-        pd_shape_lg = img_lg.shape[:2] + 2 * c.pad_lg
-        pd_sm = np.random.rand(np.product(pd_shape_sm)).reshape(pd_shape_sm)
-        pd_lg = np.random.rand(np.product(pd_shape_lg)).reshape(pd_shape_lg)
-        pd_sm[c.pad_sm:-c.pad_sm, c.pad_sm:-c.pad_sm] = img_sm
-        pd_lg[c.pad_lg:-c.pad_lg, c.pad_lg:-c.pad_lg] = img_lg
-        return [pd_sm, pd_lg]
-    else:
-        return [np.pad(img_sm, c.padding_sm, mode='symmetric'),
-                np.pad(img_lg, c.padding_lg, mode='symmetric')]
+def pad_img_pair(img_sm, img_lg, c):
+    return [np.pad(img_sm, c.padding_sm, mode='symmetric'),
+        np.pad(img_lg, c.padding_lg, mode='symmetric')]
 
 
-def pad_img(img, padding, noise=False):
-    if noise:
-        assert(len(img.shape) == 2)
-        pd_shape = img.shape[:2] + 2 * padding
-        pd_img = np.random.rand(np.product(pd_shape)).reshape(pd_shape)
-        pd_img[padding:-padding, padding:-padding] = img
-        return pd_img
-    else:
-        return np.pad(img, padding, mode='symmetric')
+def pad_img(img, padding):
+    return np.pad(img, padding, mode='symmetric')
 
 
 def compute_feature_array(im_pyr, c, full_feat):
