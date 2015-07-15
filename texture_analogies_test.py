@@ -148,7 +148,7 @@ def test_best_coherence_match():
         Bs_feat = np.hstack([extract_pixel_feature( A_pd, (row, col), c, full_feat=True),
                              extract_pixel_feature(Ap_pd, (row, col), c, full_feat=False)])
 
-        p_coh = best_coherence_match(A_pd, Ap_pd, Bs_feat, s, (row, col, imw), c)
+        p_coh, r_star = best_coherence_match(A_pd, Ap_pd, Bs_feat, s, (row, col, imw), c)
 
         try:
             assert(p_coh == (row, col))
