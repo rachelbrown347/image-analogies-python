@@ -1,15 +1,11 @@
 from itertools import product
-import pyflann as pf
+
 import numpy as np
 from numpy.linalg import norm
+import pyflann as pf
 from sklearn.feature_extraction.image import extract_patches_2d
 
-from img_preprocess import px2ix
-
-
-def pad_img_pair(img_sm, img_lg, c):
-    return [np.pad(img_sm, c.padding_sm, mode='symmetric'),
-        np.pad(img_lg, c.padding_lg, mode='symmetric')]
+from img_preprocess import px2ix, pad_img_pair
 
 
 def compute_feature_array(im_pyr, c, full_feat):

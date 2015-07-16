@@ -1,11 +1,14 @@
-import matplotlib.pyplot as plt
-import numpy as np
 import pickle
 import time
 import warnings
 
-from img_preprocess import convert_to_YIQ, convert_to_RGB, compute_gaussian_pyramid, initialize_Bp, remap_luminance, ix2px, savefig_noborder
-from texture_analogies import pad_img_pair, create_index, extract_pixel_feature, best_approximate_match, best_coherence_match, compute_distance
+import matplotlib.pyplot as plt
+import numpy as np
+
+from img_preprocess import convert_to_YIQ, convert_to_RGB, compute_gaussian_pyramid, initialize_Bp, remap_luminance, \
+                           ix2px, savefig_noborder, pad_img_pair
+from texture_analogies import create_index, extract_pixel_feature, best_approximate_match, best_coherence_match, \
+                              compute_distance
 import config as c
 
 
@@ -125,7 +128,6 @@ if __name__ == '__main__':
         app_color = np.array([1, 0, 0])
         coh_color = np.array([1, 1, 0])
         err_color = np.array([0, 0, 0])
-
 
         paths = ['%d_psrc.eps'    % (level),
                  '%d_appdist.eps' % (level),

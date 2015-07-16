@@ -71,6 +71,10 @@ def initialize_Bp(B_pyr, init_rand=True):
     return Bp_pyr
 
 
+def pad_img_pair(img_sm, img_lg, c):
+    return [np.pad(img_sm, c.padding_sm, mode='symmetric'),
+        np.pad(img_lg, c.padding_lg, mode='symmetric')]
+
 def px2ix((row, col), w):
     return int(row * w + col)
 
@@ -86,3 +90,4 @@ def savefig_noborder(fileName, fig):
     fig.axes.get_xaxis().set_visible(False)
     fig.axes.get_yaxis().set_visible(False)
     plt.savefig(fileName, bbox_inches='tight', pad_inches=0)
+

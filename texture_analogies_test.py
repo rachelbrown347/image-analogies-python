@@ -1,9 +1,11 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from img_preprocess import convert_to_YIQ, compute_gaussian_pyramid
-from texture_analogies import pad_img_pair, compute_feature_array, extract_pixel_feature, best_coherence_match, best_coherence_match_orig, create_index
 
+from img_preprocess import convert_to_YIQ, compute_gaussian_pyramid, pad_img_pair
+from texture_analogies import compute_feature_array, extract_pixel_feature, best_coherence_match, \
+                              best_coherence_match_orig, create_index
 import config as c
+
 
 def test_compute_feature_array():
     # Make and test 2D image

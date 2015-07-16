@@ -1,7 +1,8 @@
+import pickle
+
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
 import numpy as np
-import pickle
 
 from img_preprocess import compute_gaussian_pyramid
 

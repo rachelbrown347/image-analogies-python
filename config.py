@@ -1,5 +1,7 @@
 from itertools import chain, repeat
+
 import numpy as np
+
 
 
 # Set Parameters and Variables
@@ -60,9 +62,12 @@ def compute_weights(n_sm, n_lg, n_half, num_ch):
     gauss_sm = matlab_style_gauss2D((n_sm, n_sm), 0.5)
     gauss_lg = matlab_style_gauss2D((n_lg, n_lg),   1)
 
-    w_sm = (1./(n_sm * n_sm)) * np.dstack(list(chain.from_iterable(repeat(e, num_ch) for e in [gauss_sm]))).flatten()
-    w_lg = (1./(n_lg * n_lg)) * np.dstack(list(chain.from_iterable(repeat(e, num_ch) for e in [gauss_lg]))).flatten()
-    w_half = (1./n_half) * np.dstack(list(chain.from_iterable(repeat(e, num_ch) for e in [gauss_lg]))).flatten()[: n_half * num_ch]
+    gauss_sm_stack = np.dstack(list(chain.from_iterable(repeat(e, num_ch) for e in [gauss_sm]))).flatten()
+    gauss_lg_stack = np.dstack(list(chain.from_iterable(repeat(e, num_ch) for e in [gauss_lg]))).flatten()
+
+    w_sm = (1./(n_sm * n_sm)) * gauss_sm_stack
+    w_lg = (1./(n_lg * n_lg)) * gauss_lg_stack
+    w_half = (1./n_half) * gauss_lg_stack[:n_half * num_ch]
 
     return np.hstack([w_sm, w_lg, w_sm, w_half])
 
