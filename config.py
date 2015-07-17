@@ -3,7 +3,6 @@ from itertools import chain, repeat
 import numpy as np
 
 
-
 # Set Parameters and Variables
 convert   = False  # Convert to YIQ (also use color from B if true or Ap if false)
 remap_lum = False  # remap luminance of A/Ap to B

@@ -1,3 +1,4 @@
+import os
 import pickle
 import time
 import warnings
@@ -9,10 +10,12 @@ from img_preprocess import convert_to_YIQ, convert_to_RGB, compute_gaussian_pyra
                            ix2px, savefig_noborder, pad_img_pair
 from texture_analogies import create_index, extract_pixel_feature, best_approximate_match, best_coherence_match, \
                               compute_distance
-import config as c
 
 
-def img_setup(A_fname, Ap_fname, B_fname):
+def img_setup(A_fname, Ap_fname, B_fname, out_path, c):
+    if not os.path.exists(out_path):
+        os.makedirs(out_path)
+
     A_orig  = plt.imread(A_fname)
     Ap_orig = plt.imread(Ap_fname)
     B_orig  = plt.imread(B_fname)
@@ -61,37 +64,12 @@ def img_setup(A_fname, Ap_fname, B_fname):
     return A_pyr, Ap_pyr, B_pyr, Bp_pyr, color_pyr, c
 
 
-if __name__ == '__main__':
-
-    # argv = sys.argv
-    #
-    # if len(argv) != 5:
-    #     print "Usage: python", argv[0], "[imageA] [imageA'] [imageB] [output_path]"
-    #     exit()
-
-    # Read image files
-
-    # A_fname  = (argv[1])
-    # Ap_fname = (argv[2])
-    # B_fname  = (argv[3])
-    # out_path = argv[4]
-
-    # Files for testing
-    A_fname  = './images/texture_angles/angle_orig_sm.jpg'
-    Ap_fname = './images/texture_originals/desk_sm.jpg'
-    B_fname  = './images/texture_angles/angle_relit_sm_20_10_p20.jpg'
-    out_path = './images/texture_output/desk/sm_20_10_p20/'
-
-    # A_fname  = './images/texture_fabric/fabric_orig_sm_2_gb.jpg'
-    # Ap_fname = './images/texture_fabric/fabric_orig_sm_2.jpg'
-    # B_fname  = './images/texture_fabric/fabric_orig_sm_1_gb.jpg'
-    # out_path = './images/texture_fabric/output/filter_kappa_005/src2_gbfabric_tgt1_gbfabric/'
-
+def image_analogies(A_fname, Ap_fname, B_fname, out_path, c, debug=False):
     # This is all the setup code
     begin_time = time.time()
     start_time = time.time()
 
-    A_pyr, Ap_pyr, B_pyr, Bp_pyr, color_pyr, c = img_setup(A_fname, Ap_fname, B_fname)
+    A_pyr, Ap_pyr, B_pyr, Bp_pyr, color_pyr, c = img_setup(A_fname, Ap_fname, B_fname, out_path, c)
 
     stop_time = time.time()
     print 'Environment Setup: %f' % (stop_time - start_time)
@@ -123,22 +101,23 @@ if __name__ == '__main__':
 
         s = []
 
-        # debugging structures
-        sa = []
-        sc = []
-        rstars = []
-        p_src     = np.nan * np.ones((imh, imw, 3))
-        app_dist  = np.zeros((imh, imw))
-        coh_dist  = np.zeros((imh, imw))
-        app_color = np.array([1, 0, 0])
-        coh_color = np.array([1, 1, 0])
-        err_color = np.array([0, 0, 0])
+        if debug:
+            # make debugging structures
+            sa = []
+            sc = []
+            rstars = []
+            p_src     = np.nan * np.ones((imh, imw, 3))
+            app_dist  = np.zeros((imh, imw))
+            coh_dist  = np.zeros((imh, imw))
+            app_color = np.array([1, 0, 0])
+            coh_color = np.array([1, 1, 0])
+            err_color = np.array([0, 0, 0])
 
-        paths = ['%d_psrc.eps'    % (level),
-                 '%d_appdist.eps' % (level),
-                 '%d_cohdist.eps' % (level),
-                 '%d_output.eps'  % (level)]
-        vars = [p_src, app_dist, coh_dist, Bp_pyr[level]]
+            paths = ['%d_psrc.eps'    % (level),
+                     '%d_appdist.eps' % (level),
+                     '%d_cohdist.eps' % (level),
+                     '%d_output.eps'  % (level)]
+            vars = [p_src, app_dist, coh_dist, Bp_pyr[level]]
 
         for row in range(imh):
             for col in range(imw):
@@ -159,30 +138,20 @@ if __name__ == '__main__':
                 # translate p_app_ix back to row, col
                 Ap_imh, Ap_imw = Ap_pyr[level].shape[:2]
                 p_app = ix2px(p_app_ix, Ap_imw)
-                sa.append(p_app)
 
                 # is this the first iteration for this level?
                 # then skip coherence step
                 if len(s) < 1:
-                #if True: # ANN only method, used for debugging
                     p = p_app
-                    p_src[row, col] = app_color
-                    sc.append((0, 0))
-                    rstars.append((0, 0))
 
                 # Find Coherence Match and Compare Distances
                 else:
                     p_coh, r_star = best_coherence_match(As[level], A_pyr[level].shape, BBp_feat, s, (row, col, imw), c)
-                    rstars.append(r_star)
 
                     if p_coh == (-1, -1):
                         p = p_app
-                        p_src[row, col] = err_color
-                        sc.append((0, 0))
 
                     else:
-                        sc.append(p_coh)
-
                         AAp_feat_app = np.hstack([extract_pixel_feature( A_pd, p_app, c, full_feat=True),
                                                   extract_pixel_feature(Ap_pd, p_app, c, full_feat=False)])
 
@@ -192,17 +161,12 @@ if __name__ == '__main__':
                         d_app = compute_distance(AAp_feat_app, BBp_feat, c.weights)
                         d_coh = compute_distance(AAp_feat_coh, BBp_feat, c.weights)
 
-                        app_dist[row, col] = d_app
-                        coh_dist[row, col] = d_coh
-
                         if d_coh <= d_app * (1 + (2**(level - c.max_levels)) * c.k):
                             p = p_coh
-                            p_src[row, col] = coh_color
                         else:
                             p = p_app
-                            p_src[row, col] = app_color
 
-                # Set Bp and update s
+                # Update Bp and s
                 Bp_pyr[level][row, col] = Ap_pyr[level][p]
 
                 if not c.convert:
@@ -210,26 +174,49 @@ if __name__ == '__main__':
 
                 s.append(p)
 
+                if debug:
+                    sa.append(p_app)
+                    if len(s) > 1 and p_coh != (-1, -1):
+                        sc.append(p_coh)
+                        rstars.append(r_star)
+                        app_dist[row, col] = d_app
+                        coh_dist[row, col] = d_coh
+                        if p == p_coh:
+                            p_src[row, col] = coh_color
+                        elif p == p_app:
+                            p_src[row, col] = app_color
+                        else:
+                            print('There is a bug!')
+                            raise
+                    else:
+                        sc.append((0, 0))
+                        rstars.append((0, 0))
+                        p_src[row, col] = err_color
+
         ann_time_total = ann_time_total + ann_time_level
 
-        # Save debugging structures
-        for path, var in zip(paths, vars):
-            fig = plt.imshow(var, interpolation='nearest', cmap='gray')
-            savefig_noborder(out_path + path, fig)
-            plt.close()
+        if debug:
+            # Save debugging structures
+            for path, var in zip(paths, vars):
+                fig = plt.imshow(var, interpolation='nearest', cmap='gray')
+                savefig_noborder(out_path + path, fig)
+                plt.close()
 
-        with open(out_path + '%d_srcs.pickle' % level, 'w') as f:
-            pickle.dump([sa, sc, rstars, s], f)
+            with open(out_path + '%d_srcs.pickle' % level, 'w') as f:
+                pickle.dump([sa, sc, rstars, s], f)
 
         # Save color output images
         if c.convert:
             color_im_out = convert_to_RGB(np.dstack([Bp_pyr[level], color_pyr[level][:, :, 1:]]))
             color_im_out = np.clip(color_im_out, 0, 1)
-        plt.imsave(out_path + 'im_out_color_%d.jpg' % level, color_im_out)
+        plt.imsave(out_path + 'level_%d_color.jpg' % level, color_im_out)
 
         stop_time = time.time()
         print 'Level %d time: %f' % (level, stop_time - start_time)
         print('Level %d ANN time: %f' % (level, ann_time_level))
+
+    # with open(out_path + 'metadata.pickle', 'w') as f:
+    #     pickle.dump([], f)
 
     end_time = time.time()
     print 'Total time: %f' % (end_time - begin_time)
