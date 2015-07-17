@@ -10,9 +10,10 @@ init_rand = True   # initialize Bp as random
 
 if remap_lum: assert convert
 
-k      = 0.5  # 0.5 <= k <= 5 for texture synthesis
-n_sm   = 3    # coarse scale neighborhood size
-n_lg   = 5    # fine scale neighborhood size
+AB_weight = 1  # relative weighting of A and B relative to Ap and Bp
+k      = 0.5   # 0.5 <= k <= 5 for texture synthesis
+n_sm   = 3     # coarse scale neighborhood size
+n_lg   = 5     # fine scale neighborhood size
 
 n_half = np.floor((n_lg * n_lg)/2.)  # fine scale half neighborhood size
 pad_sm = np.floor(n_sm/2.)
@@ -39,6 +40,13 @@ def setup_vars(img):
     weights = compute_weights(n_sm, n_lg, n_half, num_ch)
 
     return num_ch, padding_sm, padding_lg, weights
+
+
+def save_metadata(out_path, names, vars):
+    metadata = open(out_path + 'metadata.txt', 'w')
+    for n, v in zip(names, vars):
+        metadata.write(n + ': ' + str(v) + '\n')
+    metadata.close()
 
 
 def matlab_style_gauss2D(shape=(3,3),sigma=0.5):

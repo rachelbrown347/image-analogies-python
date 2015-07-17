@@ -37,6 +37,10 @@ def remap_luminance(A, Ap, B):
     return A_remap, Ap_remap
 
 
+def compress_values(A, B, ratio):
+    return ratio * A, ratio * B
+
+
 def compute_gaussian_pyramid(img, min_size):
     h, w = img.shape[0:2]
     curr_size = np.min([h, w])

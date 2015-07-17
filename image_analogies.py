@@ -6,10 +6,12 @@ import warnings
 import matplotlib.pyplot as plt
 import numpy as np
 
-from img_preprocess import convert_to_YIQ, convert_to_RGB, compute_gaussian_pyramid, initialize_Bp, remap_luminance, \
-                           ix2px, savefig_noborder, pad_img_pair
 from algorithms import create_index, extract_pixel_feature, best_approximate_match, best_coherence_match, \
                               compute_distance
+from config import setup_vars, save_metadata
+from img_preprocess import convert_to_YIQ, convert_to_RGB, compute_gaussian_pyramid, initialize_Bp, remap_luminance, \
+                           compress_values, ix2px, savefig_noborder, pad_img_pair
+
 
 
 def img_setup(A_fname, Ap_fname, B_fname, out_path, c):
@@ -36,11 +38,13 @@ def img_setup(A_fname, Ap_fname, B_fname, out_path, c):
         Ap = Ap_orig/255.
         B  =  B_orig/255.
 
-    # Remap Luminance
+    # Process input images
     if c.remap_lum:
         A, Ap = remap_luminance(A, Ap, B)
 
-    c.num_ch, c.padding_sm, c.padding_lg, c.weights = c.setup_vars(A)
+    A, B = compress_values(A, B, c.AB_weight)
+
+    c.num_ch, c.padding_sm, c.padding_lg, c.weights = setup_vars(A)
 
     # Create Pyramids
     A_pyr  = compute_gaussian_pyramid( A, c.n_sm)
@@ -70,8 +74,10 @@ def image_analogies_main(A_fname, Ap_fname, B_fname, out_path, c, debug=False):
     start_time = time.time()
 
     A_pyr, Ap_pyr, B_pyr, Bp_pyr, color_pyr, c = img_setup(A_fname, Ap_fname, B_fname, out_path, c)
-    with open(out_path + 'metadata.pickle', 'w') as f:
-        pickle.dump([A_fname, Ap_fname, B_fname, out_path, c], f)
+
+    names = ['A_fname', 'Ap_fname', 'B_fname', 'c.convert', 'c.remap_lum', 'c.init_rand', 'c.AB_weight', 'c.k']
+    vars  = [ A_fname,   Ap_fname,   B_fname,   c.convert,   c.remap_lum,   c.init_rand,   c.AB_weight,   c.k ]
+    save_metadata(out_path, names, vars)
 
     stop_time = time.time()
     print 'Environment Setup: %f' % (stop_time - start_time)
