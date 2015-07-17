@@ -77,10 +77,15 @@ if __name__ == '__main__':
     # out_path = argv[4]
 
     # Files for testing
-    A_fname  = './images/lf_originals/half_size/fruit-src.jpg'
-    Ap_fname = './images/lf_originals/half_size/fruit-filt.jpg'
-    B_fname  = './images/lf_originals/half_size/boat-src.jpg'
-    out_path = './images/lf_originals/output/boat/working_test_3/'
+    A_fname  = './images/texture_angles/angle_orig_sm.jpg'
+    Ap_fname = './images/texture_originals/desk_sm.jpg'
+    B_fname  = './images/texture_angles/angle_relit_sm_20_10_p20.jpg'
+    out_path = './images/texture_output/desk/sm_20_10_p20/'
+
+    # A_fname  = './images/texture_fabric/fabric_orig_sm_2_gb.jpg'
+    # Ap_fname = './images/texture_fabric/fabric_orig_sm_2.jpg'
+    # B_fname  = './images/texture_fabric/fabric_orig_sm_1_gb.jpg'
+    # out_path = './images/texture_fabric/output/filter_kappa_005/src2_gbfabric_tgt1_gbfabric/'
 
     # This is all the setup code
     begin_time = time.time()

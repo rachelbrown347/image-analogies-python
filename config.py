@@ -5,15 +5,15 @@ import numpy as np
 
 
 # Set Parameters and Variables
-convert   = True  # Convert to YIQ (also use color from B if true or Ap if false)
-remap_lum = True  # remap luminance of A/Ap to B
-init_rand = True  # initialize Bp as random
+convert   = False  # Convert to YIQ (also use color from B if true or Ap if false)
+remap_lum = False  # remap luminance of A/Ap to B
+init_rand = True   # initialize Bp as random
 
 if remap_lum: assert convert
 
-k      = 25  # 0.5 <= k <= 5 for texture synthesis
-n_sm   = 3   # coarse scale neighborhood size
-n_lg   = 5   # fine scale neighborhood size
+k      = 0.5  # 0.5 <= k <= 5 for texture synthesis
+n_sm   = 3    # coarse scale neighborhood size
+n_lg   = 5    # fine scale neighborhood size
 
 n_half = np.floor((n_lg * n_lg)/2.)  # fine scale half neighborhood size
 pad_sm = np.floor(n_sm/2.)
