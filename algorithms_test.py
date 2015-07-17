@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from img_preprocess import convert_to_YIQ, compute_gaussian_pyramid, pad_img_pair
-from texture_analogies import compute_feature_array, extract_pixel_feature, best_coherence_match, \
+from algorithms import compute_feature_array, extract_pixel_feature, best_coherence_match, \
                               best_coherence_match_orig, create_index
 import config as c
 

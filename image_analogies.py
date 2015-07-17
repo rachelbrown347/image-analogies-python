@@ -8,7 +8,7 @@ import numpy as np
 
 from img_preprocess import convert_to_YIQ, convert_to_RGB, compute_gaussian_pyramid, initialize_Bp, remap_luminance, \
                            ix2px, savefig_noborder, pad_img_pair
-from texture_analogies import create_index, extract_pixel_feature, best_approximate_match, best_coherence_match, \
+from algorithms import create_index, extract_pixel_feature, best_approximate_match, best_coherence_match, \
                               compute_distance
 
 
@@ -64,12 +64,14 @@ def img_setup(A_fname, Ap_fname, B_fname, out_path, c):
     return A_pyr, Ap_pyr, B_pyr, Bp_pyr, color_pyr, c
 
 
-def image_analogies(A_fname, Ap_fname, B_fname, out_path, c, debug=False):
-    # This is all the setup code
+def image_analogies_main(A_fname, Ap_fname, B_fname, out_path, c, debug=False):
+    # # This is the setup code
     begin_time = time.time()
     start_time = time.time()
 
     A_pyr, Ap_pyr, B_pyr, Bp_pyr, color_pyr, c = img_setup(A_fname, Ap_fname, B_fname, out_path, c)
+    with open(out_path + 'metadata.pickle', 'w') as f:
+        pickle.dump([A_fname, Ap_fname, B_fname, out_path, c], f)
 
     stop_time = time.time()
     print 'Environment Setup: %f' % (stop_time - start_time)
@@ -214,9 +216,6 @@ def image_analogies(A_fname, Ap_fname, B_fname, out_path, c, debug=False):
         stop_time = time.time()
         print 'Level %d time: %f' % (level, stop_time - start_time)
         print('Level %d ANN time: %f' % (level, ann_time_level))
-
-    # with open(out_path + 'metadata.pickle', 'w') as f:
-    #     pickle.dump([], f)
 
     end_time = time.time()
     print 'Total time: %f' % (end_time - begin_time)
