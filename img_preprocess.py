@@ -22,19 +22,22 @@ def convert_to_RGB(img):
     return np.einsum('ij,klj->kli', m, img)
 
 
-def remap_luminance(A, Ap, B):
+def remap_luminance(A, Ap_list, B):
     # single channel only
-    assert(len(A.shape) == len(Ap.shape) == len(B.shape) == 2)
+    assert(len(A.shape) == len(Ap_list[0].shape) == len(B.shape) == 2)
 
     m_A = np.mean(A)
     m_B = np.mean(B)
     s_A = np.std(A)
     s_B = np.std(B)
 
-    A_remap  = (s_B/s_A) * ( A - m_A) + m_B
-    Ap_remap = (s_B/s_A) * (Ap - m_A) + m_B
+    A_remap = (s_B/s_A) * ( A - m_A) + m_B
 
-    return A_remap, Ap_remap
+    Ap_remap_list = []
+    for Ap in Ap_list:
+        Ap_remap_list.append((s_B/s_A) * (Ap - m_A) + m_B)
+
+    return A_remap, Ap_remap_list
 
 
 def compress_values(A, B, ratio):
@@ -79,14 +82,28 @@ def pad_img_pair(img_sm, img_lg, c):
     return [np.pad(img_sm, c.padding_sm, mode='symmetric'),
         np.pad(img_lg, c.padding_lg, mode='symmetric')]
 
-def px2ix((row, col), w):
-    return int(row * w + col)
+def px2ix(pxs, w):
+    rows, cols = pxs[0], pxs[1]
+    return (rows * w + cols).astype(int)
 
 
-def ix2px(ix, w):
-    col = ix % w
-    row = (ix - col) // w
-    return (row, col)
+def ix2px(ixs, w):
+    cols = ixs % w
+    rows = (ixs - cols) // w
+    return np.array([rows, cols])
+
+
+def Ap_ix2px(ixs, h, w):
+    pxs = ix2px(ixs, w)
+    rows, cols = pxs[0], pxs[1]
+    img_nums = (np.floor(rows/h)).astype(int)
+    img_ixs = ixs - img_nums * h * w
+    return ix2px(img_ixs, w), img_nums
+
+
+def Ap_px2ix(pxs, img_nums, h, w):
+    rows, cols = pxs[0], pxs[1]
+    return (((h * img_nums) + rows) * w + cols).astype(int)
 
 
 def savefig_noborder(fileName, fig):

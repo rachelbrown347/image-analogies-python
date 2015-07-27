@@ -5,7 +5,7 @@ from numpy.linalg import norm
 import pyflann as pf
 from sklearn.feature_extraction.image import extract_patches_2d
 
-from img_preprocess import px2ix, pad_img_pair
+from img_preprocess import px2ix, pad_img_pair, Ap_ix2px, Ap_px2ix
 
 
 def compute_feature_array(im_pyr, c, full_feat):
@@ -47,19 +47,26 @@ def compute_feature_array(im_pyr, c, full_feat):
     return im_features
 
 
-def create_index(A_pyr, Ap_pyr, c):
+def create_index(A_pyr, Ap_pyr_list, c):
     A_feat  = compute_feature_array(A_pyr,  c, full_feat=True)
-    Ap_feat = compute_feature_array(Ap_pyr, c, full_feat=False)
+    Ap_feat_list = []
+    for Ap_pyr in Ap_pyr_list:
+        Ap_feat_list.append(compute_feature_array(Ap_pyr, c, full_feat=False))
 
     flann = [pf.FLANN() for _ in xrange(c.max_levels)]
     flann_params = [list([]) for _ in xrange(c.max_levels)]
     As = [list([]) for _ in xrange(c.max_levels)]
     As_size = [list([]) for _ in xrange(c.max_levels)]
+
     for level in range(1, c.max_levels):
         print('Building index for level %d out of %d' % (level, c.max_levels - 1))
-        As[level] = np.hstack([A_feat[level], Ap_feat[level]])
+        As_list = []
+        for Ap_feat in Ap_feat_list:
+            As_list.append(np.hstack([A_feat[level], Ap_feat[level]]))
+
+        As[level] = np.vstack(As_list)
         As_size[level] = As[level].shape
-        flann_params[level] = flann[level].build_index(As[level], algorithm='kmeans')
+        flann_params[level] = flann[level].build_index(As[level], algorithm='kdtree')
     return flann, flann_params, As, As_size
 
 
@@ -82,76 +89,45 @@ def extract_pixel_feature((im_sm_padded, im_lg_padded), (row, col), c, full_feat
         return px_feat[:c.num_ch * ((c.n_sm * c.n_sm) + c.n_half)]
 
 
-def best_coherence_match_orig(A_pd, Ap_pd, BBp_feat, s, (row, col, Bp_w), c):
+def best_coherence_match(As, (A_h, A_w), BBp_feat, s, im, px, Bp_w, c):
     assert(len(s) >= 1)
 
-    # Handle edge cases
-    row_min = np.max([0, row - c.pad_lg])
-    row_max = row + 1
-    col_min = np.max([0, col - c.pad_lg])
-    col_max = np.min([Bp_w, col + c.pad_lg + 1])
-
-    min_sum = float('inf')
-    r_star = (np.nan, np.nan)
-    for r_row in np.arange(row_min, row_max, dtype=int):
-        col_end = col if r_row == row else col_max
-        for r_col in np.arange(col_min, col_end, dtype=int):
-            s_ix = r_row * Bp_w + r_col
-
-            # p = s(r) + (q - r)
-            p_r = np.array(s[s_ix]) + np.array([row, col]) - np.array([r_row, r_col])
-
-            # check that p_r is inside the bounds of A/Ap lg
-            A_h, A_w = A_pd[1].shape[:2] - 2 * c.pad_lg
-
-            if 0 <= p_r[0] < A_h and 0 <= p_r[1] < A_w:
-                AAp_feat = np.hstack([extract_pixel_feature( A_pd, p_r, c, full_feat=True),
-                                      extract_pixel_feature(Ap_pd, p_r, c, full_feat=False)])
-
-                assert(AAp_feat.shape == BBp_feat.shape)
-
-                new_sum = norm(AAp_feat - BBp_feat, ord=2)**2
-
-                if new_sum <= min_sum:
-                    min_sum = new_sum
-                    r_star = np.array([r_row, r_col])
-    if np.isnan(r_star).any():
-        return (-1, -1), (0, 0)
-
-    # s[r_star] + (q - r_star)
-    return tuple(s[r_star[0] * Bp_w + r_star[1]] + (np.array([row, col]) - r_star)), tuple(r_star)
-
-
-def best_coherence_match(As, A_shape, BBp_feat, s, (row, col, Bp_w), c):
-    assert(len(s) >= 1)
-
-    A_h, A_w = A_shape[:2]
+    row, col = px
 
     # construct iterables
     rs = []
+    ims = []
     prs = []
     rows = np.arange(np.max([0, row - c.pad_lg]), row + 1, dtype=int)
     cols = np.arange(np.max([0, col - c.pad_lg]), np.min([Bp_w, col + c.pad_lg + 1]), dtype=int)
 
     for r_coord in product(rows, cols):
         # discard anything after current pixel
-        if px2ix(r_coord, Bp_w) < px2ix((row, col), Bp_w):
+        if px2ix(r_coord, Bp_w) < px2ix(px, Bp_w):
             # p_r = s(r) + (q - r)
-            pr = s[px2ix(r_coord, Bp_w)] + np.array([row, col]) - r_coord
+
+            # pr is an index in a given image Ap_list[img_num]
+            pr = s[px2ix(r_coord, Bp_w)] + px - r_coord
+
+            # i is a list of image nums for each pixel in Bp
+            img_nums = im[px2ix(r_coord, Bp_w)]
 
             # discard anything outside the bounds of A/Ap lg
             if 0 <= pr[0] < A_h and 0 <= pr[1] < A_w:
-                rs.append(r_coord)
-                prs.append(px2ix(pr, A_w))
+                rs.append(np.array(r_coord))
+                ims.append(img_nums)
+                prs.append(Ap_px2ix(pr, img_nums, A_h, A_w))
+
 
     if not rs:
         # no good coherence match
-        return (-1, -1), (0, 0)
+        return (-1, -1), 0, (0, 0)
 
     rix = np.argmin(norm(As[np.array(prs)] - BBp_feat, ord=2, axis=1))
     r_star = rs[rix]
+    i_star = ims[rix]
     # s[r_star] + (q - r-star)
-    return tuple(s[px2ix(r_star, Bp_w)] + np.array([row, col]) - r_star), r_star
+    return s[px2ix(r_star, Bp_w)] + px - r_star, i_star, r_star
 
 
 def compute_distance(AAp_p, BBp_q, weights):

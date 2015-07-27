@@ -115,6 +115,46 @@ def test_extract_pixel_feature():
     assert(np.allclose(feat, correct_feat_0_0))
 
 
+def best_coherence_match_orig(A_pd, Ap_pd, BBp_feat, s, (row, col, Bp_w), c):
+    assert(len(s) >= 1)
+
+    # Handle edge cases
+    row_min = np.max([0, row - c.pad_lg])
+    row_max = row + 1
+    col_min = np.max([0, col - c.pad_lg])
+    col_max = np.min([Bp_w, col + c.pad_lg + 1])
+
+    min_sum = float('inf')
+    r_star = (np.nan, np.nan)
+    for r_row in np.arange(row_min, row_max, dtype=int):
+        col_end = col if r_row == row else col_max
+        for r_col in np.arange(col_min, col_end, dtype=int):
+            s_ix = r_row * Bp_w + r_col
+
+            # p = s(r) + (q - r)
+            p_r = np.array(s[s_ix]) + np.array([row, col]) - np.array([r_row, r_col])
+
+            # check that p_r is inside the bounds of A/Ap lg
+            A_h, A_w = A_pd[1].shape[:2] - 2 * c.pad_lg
+
+            if 0 <= p_r[0] < A_h and 0 <= p_r[1] < A_w:
+                AAp_feat = np.hstack([extract_pixel_feature( A_pd, p_r, c, full_feat=True),
+                                      extract_pixel_feature(Ap_pd, p_r, c, full_feat=False)])
+
+                assert(AAp_feat.shape == BBp_feat.shape)
+
+                new_sum = norm(AAp_feat - BBp_feat, ord=2)**2
+
+                if new_sum <= min_sum:
+                    min_sum = new_sum
+                    r_star = np.array([r_row, r_col])
+    if np.isnan(r_star).any():
+        return (-1, -1), (0, 0)
+
+    # s[r_star] + (q - r_star)
+    return tuple(s[r_star[0] * Bp_w + r_star[1]] + (np.array([row, col]) - r_star)), tuple(r_star)
+
+
 def test_best_coherence_match():
     # make A_pd, Ap_pd, BBp_feat, s
     A_orig  = plt.imread('./test_images/test_best_coherence_match_A.jpg')

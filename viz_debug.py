@@ -65,32 +65,34 @@ def load_imgs(src_path, out_path):
     scs = [[]]
     rss = [[]]
     ss = [[]]
+    ims = [[]]
 
     for level in range(1, len(src_pyr)):
         with open(out_path + '%d_srcs.pickle' % level) as f:
-            sa, sc, rstars, s = pickle.load(f)
+            sa, sc, rstars, s, im = pickle.load(f)
 
-        assert(len(sa) == len(sc) == len(rstars) == len(s))
+        assert(len(sa) == len(sc) == len(rstars) == len(s) == len(im))
 
         sas.append(sa)
         scs.append(sc)
         rss.append(rstars)
         ss.append(s)
+        ims.append(im)
         out_img = plt.imread(out_path + 'im_out_color_%d.jpg' % level)
 
         out_pyr.append(out_img)
 
-    return src_pyr, out_pyr, sas, scs, rss, ss
+    return src_pyr, out_pyr, sas, scs, rss, ss, ims
 
 
 src_path = './images/lf_originals/half_size/fruit-filt.jpg'
 out_path = './images/lf_originals/output/boat/working_test_2/'
 level = 6
 
-src_pyr, out_pyr, sas, scs, rss, ss = load_imgs(src_path, out_path)
+src_pyr, out_pyr, sas, scs, rss, ss, ims = load_imgs(src_path, out_path)
 print('Images Loaded! Level = %d' % level)
 
-show_pair(src_pyr[level], out_pyr[level], sas[level], scs[level], rss[level], ss[level])
+show_pair(src_pyr[level], out_pyr[level], sas[level], scs[level], rss[level], ss[level], ims[level])
 
 
 
